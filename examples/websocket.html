@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Recorder ES - WebSocket Streaming Example</title>
+  <title>Recorder ES - WebSocket 实时流传输示例</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -80,30 +80,30 @@
   </style>
 </head>
 <body>
-  <h1>🌐 Recorder ES - WebSocket Streaming</h1>
+  <h1>🌐 Recorder ES - WebSocket 实时流传输</h1>
   
   <div class="info-box">
-    <strong>Note:</strong> This example demonstrates real-time audio streaming to a WebSocket server.
-    For demonstration purposes, it simulates a WebSocket connection (echo server).
-    In a real application, you would connect to your actual transcription or processing service.
+    <strong>注意:</strong> 本示例演示了向 WebSocket 服务器进行实时音频流传输。
+    为演示目的，它模拟了 WebSocket 连接（回显服务器）。
+    在实际应用中，您应连接到实际的转译或处理服务。
   </div>
 
   <div class="controls">
-    <button id="connectBtn">Connect</button>
-    <button id="disconnectBtn" disabled>Disconnect</button>
-    <button id="startBtn" disabled>Start Streaming</button>
-    <button id="stopBtn" disabled>Stop Streaming</button>
+    <button id="connectBtn">连接</button>
+    <button id="disconnectBtn" disabled>断开连接</button>
+    <button id="startBtn" disabled>开始流传输</button>
+    <button id="stopBtn" disabled>停止流传输</button>
   </div>
 
   <div class="status">
-    <strong>Connection:</strong> <span id="connectionStatus">Disconnected</span><br>
-    <strong>Recording:</strong> <span id="recordingStatus">Inactive</span><br>
-    <strong>Chunks Sent:</strong> <span id="chunkCount">0</span><br>
-    <strong>Data Sent:</strong> <span id="dataSent">0</span> bytes
+    <strong>连接状态:</strong> <span id="connectionStatus">未连接</span><br>
+    <strong>录音状态:</strong> <span id="recordingStatus">未激活</span><br>
+    <strong>已发送块数:</strong> <span id="chunkCount">0</span><br>
+    <strong>已发送数据:</strong> <span id="dataSent">0</span> 字节
   </div>
 
   <div class="log" id="log">
-    <div class="log-entry">Waiting for connection...</div>
+    <div class="log-entry">等待连接...</div>
   </div>
 
   <script type="module">
@@ -237,9 +237,10 @@
 
     startBtn.addEventListener('click', async () => {
       try {
-        recorder = new Recorder({
-          audioBitsPerSecond: 64000, // Lower bitrate for streaming
-          timeslice: 100, // Get chunks every 100ms for low latency
+        // 使用工厂方法创建录音器实例
+        recorder = Recorder.create({
+          audioBitsPerSecond: 64000, // 较低比特率用于流传输
+          timeslice: 100, // 每 100ms 获取块以实现低延迟
         });
 
         chunkCount = 0;

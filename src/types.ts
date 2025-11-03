@@ -1,69 +1,69 @@
 /**
- * Configuration options for the Recorder
+ * 录音器配置选项
  */
 export interface RecorderOptions {
   /**
-   * Audio MIME type to use for recording
+   * 录音使用的音频 MIME 类型
    * @default 'audio/webm;codecs=opus'
    */
   mimeType?: string;
 
   /**
-   * Target audio bitrate in bits per second
+   * 目标音频比特率（每秒比特数）
    * @default 128000
    */
   audioBitsPerSecond?: number;
 
   /**
-   * Interval in milliseconds for slicing audio data
-   * Used for real-time streaming scenarios
+   * 切片音频数据的时间间隔（毫秒）
+   * 用于实时流场景
    * @default 1000
    */
   timeslice?: number;
 }
 
 /**
- * State of the recorder
+ * 录音器状态
  */
 export type RecorderState = 'inactive' | 'recording' | 'paused';
 
 /**
- * Event types supported by the recorder
+ * 录音器支持的事件类型
  */
 export interface RecorderEventMap {
   /**
-   * Fired when recording starts
+   * 录音开始时触发
    */
   start: Event;
 
   /**
-   * Fired when recording stops
+   * 录音停止时触发
    */
   stop: Event;
 
   /**
-   * Fired when recording is paused
+   * 录音暂停时触发
    */
   pause: Event;
 
   /**
-   * Fired when recording resumes from pause
+   * 录音从暂停恢复时触发
    */
   resume: Event;
 
   /**
-   * Fired when audio data becomes available
+   * 音频数据可用时触发
    */
   dataavailable: BlobEvent;
 
   /**
-   * Fired when an error occurs
+   * 发生错误时触发
    */
   error: ErrorEvent;
 }
 
 /**
- * Custom event containing audio data
+ * 包含音频数据的自定义事件
  */
 export class BlobEvent extends Event {
   data: Blob;
@@ -74,4 +74,24 @@ export class BlobEvent extends Event {
     this.data = data;
     this.timecode = timecode;
   }
+}
+
+/**
+ * 支持的输出格式
+ */
+export type OutputFormat = 'webm' | 'mp4' | 'wav' | 'mp3' | 'ogg' | 'flac';
+
+/**
+ * 格式转换选项
+ */
+export interface ConvertOptions {
+  /**
+   * 目标格式
+   */
+  format: OutputFormat;
+
+  /**
+   * 音频比特率（可选）
+   */
+  audioBitsPerSecond?: number;
 }

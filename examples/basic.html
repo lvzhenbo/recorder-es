@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Recorder ES - Basic Example</title>
+  <title>Recorder ES - 基础示例</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
@@ -65,24 +65,24 @@
   </style>
 </head>
 <body>
-  <h1>🎙️ Recorder ES - Basic Example</h1>
+  <h1>🎙️ Recorder ES - 基础示例</h1>
   
   <div class="controls">
-    <button id="startBtn">Start Recording</button>
-    <button id="pauseBtn" disabled>Pause</button>
-    <button id="resumeBtn" disabled>Resume</button>
-    <button id="stopBtn" disabled>Stop Recording</button>
+    <button id="startBtn">开始录音</button>
+    <button id="pauseBtn" disabled>暂停</button>
+    <button id="resumeBtn" disabled>恢复</button>
+    <button id="stopBtn" disabled>停止录音</button>
   </div>
 
   <div class="status">
-    <strong>Status:</strong> <span id="status">Inactive</span><br>
-    <strong>State:</strong> <span id="state">inactive</span><br>
-    <strong>Duration:</strong> <span id="duration">0</span>s
+    <strong>状态:</strong> <span id="status">未激活</span><br>
+    <strong>录音状态:</strong> <span id="state">inactive</span><br>
+    <strong>时长:</strong> <span id="duration">0</span>秒
   </div>
 
   <div class="recordings" id="recordings">
-    <h2>Recordings</h2>
-    <p id="noRecordings">No recordings yet. Click "Start Recording" to begin.</p>
+    <h2>录音列表</h2>
+    <p id="noRecordings">暂无录音。点击"开始录音"开始录制。</p>
   </div>
 
   <script type="module">
@@ -121,7 +121,7 @@
 
     function addRecording(blob) {
       const url = URL.createObjectURL(blob);
-      const timestamp = new Date().toLocaleString();
+      const timestamp = new Date().toLocaleString('zh-CN');
       
       noRecordingsEl.style.display = 'none';
 
@@ -130,7 +130,7 @@
       div.innerHTML = `
         <audio controls src="${url}"></audio>
         <button class="download-btn" onclick="downloadRecording('${url}', '${timestamp}')">
-          Download
+          下载
         </button>
       `;
       
@@ -146,46 +146,47 @@
 
     startBtn.addEventListener('click', async () => {
       try {
-        recorder = new Recorder({
+        // 使用工厂方法创建录音器实例
+        recorder = Recorder.create({
           audioBitsPerSecond: 128000,
           timeslice: 1000,
         });
 
         recorder.addEventListener('start', () => {
-          statusEl.textContent = 'Recording...';
+          statusEl.textContent = '录音中...';
           startTime = Date.now();
           durationInterval = setInterval(updateDuration, 100);
           updateButtons();
         });
 
         recorder.addEventListener('stop', () => {
-          statusEl.textContent = 'Recording stopped';
+          statusEl.textContent = '录音已停止';
           clearInterval(durationInterval);
           durationEl.textContent = '0';
           updateButtons();
         });
 
         recorder.addEventListener('pause', () => {
-          statusEl.textContent = 'Recording paused';
+          statusEl.textContent = '录音已暂停';
           clearInterval(durationInterval);
           updateButtons();
         });
 
         recorder.addEventListener('resume', () => {
-          statusEl.textContent = 'Recording...';
+          statusEl.textContent = '录音中...';
           durationInterval = setInterval(updateDuration, 100);
           updateButtons();
         });
 
         recorder.addEventListener('error', (event) => {
-          statusEl.textContent = `Error: ${event.error.message}`;
-          console.error('Recording error:', event.error);
+          statusEl.textContent = `错误: ${event.error.message}`;
+          console.error('录音错误:', event.error);
         });
 
         await recorder.start();
       } catch (error) {
-        statusEl.textContent = `Error: ${error.message}`;
-        console.error('Failed to start recording:', error);
+        statusEl.textContent = `错误: ${error.message}`;
+        console.error('启动录音失败:', error);
       }
     });
 
@@ -209,13 +210,13 @@
           recorder.dispose();
           recorder = null;
         } catch (error) {
-          statusEl.textContent = `Error: ${error.message}`;
-          console.error('Failed to stop recording:', error);
+          statusEl.textContent = `错误: ${error.message}`;
+          console.error('停止录音失败:', error);
         }
       }
     });
 
-    // Initialize button states
+    // 初始化按钮状态
     updateButtons();
   </script>
 </body>
