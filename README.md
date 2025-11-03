@@ -7,7 +7,7 @@
 - 🎙️ **简洁的 API** - 函数式 API，使用 `createRecorder()` 创建实例，与 Vue 等现代框架完美兼容
 - 📡 **实时流传输** - 支持 WebSocket 传输和实时音频处理
 - 🔄 **完整控制** - 开始、停止、暂停和恢复录音
-- 🎵 **格式转换** - 基于 mediabunny 支持转换为 MP4、WAV、MP3、OGG、FLAC 等格式
+- 🎵 **格式转换** - 基于 mediabunny 支持转换为 MP4、MOV、MKV、WebM、OGG、MP3、WAV、AAC、FLAC 等格式
 - 📊 **音量监测** - 实时检测音量级别，适用于可视化和用户反馈
 - 📦 **现代技术栈** - TypeScript 5.9+、ESM 模块、ES2020+ 目标
 - 🎯 **类型安全** - 完整的 TypeScript 类型定义支持
@@ -74,6 +74,17 @@ const wavBlob = await convertAudio(webmBlob, {
 const mp3Blob = await convertAudio(webmBlob, {
   format: 'mp3',
   audioBitsPerSecond: 192000,
+});
+
+// 转换为 MOV 格式（QuickTime）
+const movBlob = await convertAudio(webmBlob, {
+  format: 'mov',
+});
+
+// 转换为 AAC 格式
+const aacBlob = await convertAudio(webmBlob, {
+  format: 'aac',
+  audioBitsPerSecond: 128000,
 });
 ```
 
@@ -489,7 +500,24 @@ interface RecorderOptions {
 
 ```typescript
 interface ConvertOptions {
-  format: 'webm' | 'mp4' | 'wav' | 'mp3' | 'ogg' | 'flac';
+  /**
+   * 目标格式（支持 mediabunny 的所有容器格式）
+   * - webm: WebM 容器
+   * - mp4: MPEG-4 容器（也支持 .m4v, .m4a）
+   * - mov: QuickTime 文件格式
+   * - mkv: Matroska 容器
+   * - ogg: Ogg 容器
+   * - mp3: MP3 音频
+   * - wav: WAVE 音频
+   * - aac: AAC 音频（ADTS 格式）
+   * - flac: FLAC 无损音频
+   */
+  format: 'webm' | 'mp4' | 'mov' | 'mkv' | 'ogg' | 'mp3' | 'wav' | 'aac' | 'flac';
+  
+  /**
+   * 音频比特率（可选）
+   * 单位：比特/秒（例如：128000 表示 128 kbps）
+   */
   audioBitsPerSecond?: number;
 }
 ```
@@ -655,7 +683,7 @@ recordAndConvert();
 - Safari 14.1+
 - Edge 79+
 
-格式转换功能基于 [mediabunny](https://mediabunny.dev/)，需要现代浏览器支持。
+格式转换功能基于 [mediabunny](https://mediabunny.dev/)，支持所有 mediabunny 容器格式（MP4、MOV、MKV、WebM、OGG、MP3、WAV、AAC、FLAC），需要现代浏览器支持。详细的格式和编解码器支持信息请参考 [mediabunny 文档](https://mediabunny.dev/guide/output-formats)。
 
 ## 许可证
 
