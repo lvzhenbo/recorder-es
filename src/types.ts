@@ -63,9 +63,15 @@ export interface RecorderEventMap {
 }
 
 /**
- * Event containing audio data
+ * Custom event containing audio data
  */
-export interface BlobEvent extends Event {
+export class BlobEvent extends Event {
   data: Blob;
   timecode: number;
+
+  constructor(type: string, data: Blob, timecode: number) {
+    super(type);
+    this.data = data;
+    this.timecode = timecode;
+  }
 }

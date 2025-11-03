@@ -1,4 +1,5 @@
 import type { RecorderOptions, RecorderState, RecorderEventMap } from './types.js';
+import { BlobEvent } from './types.js';
 
 /**
  * Modern web audio recorder with real-time streaming support
@@ -115,9 +116,7 @@ export class Recorder extends EventTarget {
           this.chunks.push(event.data);
           
           // Dispatch custom event with blob data
-          const blobEvent = new Event('dataavailable') as any;
-          blobEvent.data = event.data;
-          blobEvent.timecode = Date.now();
+          const blobEvent = new BlobEvent('dataavailable', event.data, Date.now());
           this.dispatchEvent(blobEvent);
         }
       });
@@ -188,15 +187,6 @@ export class Recorder extends EventTarget {
       throw new Error('Recorder is not paused');
     }
     this.mediaRecorder.resume();
-  }
-
-  /**
-   * Gets the audio stream for real-time processing
-   * This can be used to send audio data via WebSocket or process in real-time
-   * @returns The MediaStream being recorded, or null if not recording
-   */
-  getStream(): MediaStream | null {
-    return this.audioStream;
   }
 
   /**

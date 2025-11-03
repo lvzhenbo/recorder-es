@@ -10,9 +10,9 @@
  */
 
 export { Recorder } from './recorder.js';
+export { BlobEvent } from './types.js';
 export type {
   RecorderOptions,
   RecorderState,
   RecorderEventMap,
-  BlobEvent,
 } from './types.js';

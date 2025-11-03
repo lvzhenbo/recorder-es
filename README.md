@@ -69,7 +69,7 @@ recorder.addEventListener('dataavailable', (event) => {
 await recorder.start();
 
 // The stream is also directly accessible
-const stream = recorder.getStream();
+const stream = recorder.stream;
 if (stream) {
   // Use the MediaStream for other purposes
   // e.g., live audio visualization, processing, etc.
@@ -204,7 +204,6 @@ interface RecorderOptions {
 - `async stop(): Promise<Blob>` - Stop recording and return audio blob
 - `pause(): void` - Pause recording
 - `resume(): void` - Resume recording
-- `getStream(): MediaStream | null` - Get the audio stream for real-time processing
 - `dispose(): void` - Release all resources
 - `static isTypeSupported(mimeType: string): boolean` - Check if MIME type is supported
 
@@ -250,7 +249,7 @@ const recorder = new Recorder({ timeslice: 100 });
 const audioContext = new AudioContext();
 
 await recorder.start();
-const stream = recorder.getStream();
+const stream = recorder.stream;
 
 if (stream) {
   const source = audioContext.createMediaStreamSource(stream);
