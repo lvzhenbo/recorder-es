@@ -8,11 +8,12 @@
  * - 实时音频流传输支持
  * - 简洁直观的 API
  * - 支持多种音频格式转换
- * - 现代化的事件处理（配置回调和 onXxx 方法）
+ * - 函数式 API，优化摇树（tree-shaking）
  */
 
-export { Recorder } from './recorder.js';
+export { createRecorder, isTypeSupported, convertAudio } from './recorder.js';
 export type {
+  RecorderInstance,
   RecorderOptions,
   RecorderState,
   RecorderEventHandlers,

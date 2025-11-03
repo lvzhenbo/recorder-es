@@ -4,6 +4,86 @@
 export type UnsubscribeFn = () => void;
 
 /**
+ * 录音器状态
+ */
+export type RecorderState = 'inactive' | 'recording' | 'paused';
+
+/**
+ * 录音器实例接口
+ */
+export interface RecorderInstance {
+  /**
+   * 获取录音器当前状态
+   */
+  readonly state: RecorderState;
+  
+  /**
+   * 获取音频流（录音时可用）
+   */
+  readonly stream: MediaStream | null;
+  
+  /**
+   * 获取正在使用的 MIME 类型
+   */
+  readonly mimeType: string;
+  
+  /**
+   * 开始录音
+   */
+  start(): Promise<void>;
+  
+  /**
+   * 停止录音并返回音频 Blob
+   */
+  stop(): Promise<Blob>;
+  
+  /**
+   * 暂停录音
+   */
+  pause(): void;
+  
+  /**
+   * 恢复录音
+   */
+  resume(): void;
+  
+  /**
+   * 释放所有资源
+   */
+  dispose(): void;
+  
+  /**
+   * 监听录音开始事件
+   */
+  onStart(handler: () => void): UnsubscribeFn;
+  
+  /**
+   * 监听录音停止事件
+   */
+  onStop(handler: () => void): UnsubscribeFn;
+  
+  /**
+   * 监听录音暂停事件
+   */
+  onPause(handler: () => void): UnsubscribeFn;
+  
+  /**
+   * 监听录音恢复事件
+   */
+  onResume(handler: () => void): UnsubscribeFn;
+  
+  /**
+   * 监听音频数据可用事件
+   */
+  onDataAvailable(handler: (data: Blob, timecode: number) => void): UnsubscribeFn;
+  
+  /**
+   * 监听错误事件
+   */
+  onError(handler: (error: Error) => void): UnsubscribeFn;
+}
+
+/**
  * 事件处理器类型
  */
 export interface RecorderEventHandlers {
@@ -61,11 +141,6 @@ export interface RecorderOptions extends RecorderEventHandlers {
    */
   timeslice?: number;
 }
-
-/**
- * 录音器状态
- */
-export type RecorderState = 'inactive' | 'recording' | 'paused';
 
 /**
  * 支持的输出格式

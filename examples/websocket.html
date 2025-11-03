@@ -107,7 +107,7 @@
   </div>
 
   <script type="module">
-    import { Recorder } from '../dist/index.js';
+    import { createRecorder } from '../dist/index.js';
 
     const connectBtn = document.getElementById('connectBtn');
     const disconnectBtn = document.getElementById('disconnectBtn');
@@ -242,8 +242,8 @@
         chunkCountEl.textContent = '0';
         dataSentEl.textContent = '0';
 
-        // 使用工厂方法和配置回调创建录音器实例
-        recorder = Recorder.create({
+        // 使用createRecorder函数和配置回调创建录音器实例
+        recorder = createRecorder({
           audioBitsPerSecond: 64000, // 较低比特率用于流传输
           timeslice: 100, // 每 100ms 获取块以实现低延迟
           onDataAvailable: (data, timecode) => {

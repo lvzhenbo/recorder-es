@@ -86,7 +86,7 @@
   </div>
 
   <script type="module">
-    import { Recorder } from '../dist/index.js';
+    import { createRecorder } from '../dist/index.js';
 
     const startBtn = document.getElementById('startBtn');
     const pauseBtn = document.getElementById('pauseBtn');
@@ -146,8 +146,8 @@
 
     startBtn.addEventListener('click', async () => {
       try {
-        // 使用工厂方法和配置回调创建录音器实例
-        recorder = Recorder.create({
+        // 使用createRecorder函数和配置回调创建录音器实例
+        recorder = createRecorder({
           audioBitsPerSecond: 128000,
           timeslice: 1000,
           onStart: () => {

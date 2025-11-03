@@ -4,14 +4,15 @@
 
 ## 特性
 
-- 🎙️ **简洁的 API** - 使用工厂模式创建录音器实例，与 Vue 等现代框架完美兼容
+- 🎙️ **简洁的 API** - 函数式 API，使用 `createRecorder()` 创建实例，与 Vue 等现代框架完美兼容
 - 📡 **实时流传输** - 支持 WebSocket 传输和实时音频处理
 - 🔄 **完整控制** - 开始、停止、暂停和恢复录音
 - 🎵 **格式转换** - 基于 mediabunny 支持转换为 MP4、WAV、MP3、OGG、FLAC 等格式
 - 📦 **现代技术栈** - TypeScript 5.9+、ESM 模块、ES2020+ 目标
 - 🎯 **类型安全** - 完整的 TypeScript 类型定义支持
 - ✨ **现代化事件处理** - 配置回调和 `onXxx` 方法（返回清理函数），无需使用 `addEventListener`
-- ⚡ **轻量级** - 使用 tsdown 打包，优化包大小
+- 🌲 **优化摇树** - 函数式设计，最大化tree-shaking效果
+- ⚡ **轻量级** - 仅 7.15 KB（gzip: 2.18 KB），使用 tsdown 打包
 
 ## 安装
 
@@ -24,10 +25,10 @@ npm install recorder-es
 ### 基础录音
 
 ```typescript
-import { Recorder } from 'recorder-es';
+import { createRecorder } from 'recorder-es';
 
-// 使用工厂方法创建录音器实例
-const recorder = Recorder.create({
+// 使用 createRecorder 函数创建录音器实例
+const recorder = createRecorder({
   mimeType: 'audio/webm;codecs=opus',
   audioBitsPerSecond: 128000,
   timeslice: 1000, // 每秒获取数据块
@@ -50,26 +51,26 @@ a.click();
 ### 格式转换
 
 ```typescript
-import { Recorder } from 'recorder-es';
+import { createRecorder, convertAudio } from 'recorder-es';
 
 // 录制音频
-const recorder = Recorder.create();
+const recorder = createRecorder();
 await recorder.start();
 const webmBlob = await recorder.stop();
 
 // 转换为 MP4 格式
-const mp4Blob = await Recorder.convert(webmBlob, {
+const mp4Blob = await convertAudio(webmBlob, {
   format: 'mp4',
   audioBitsPerSecond: 128000,
 });
 
 // 转换为 WAV 格式
-const wavBlob = await Recorder.convert(webmBlob, {
+const wavBlob = await convertAudio(webmBlob, {
   format: 'wav',
 });
 
 // 转换为 MP3 格式
-const mp3Blob = await Recorder.convert(webmBlob, {
+const mp3Blob = await convertAudio(webmBlob, {
   format: 'mp3',
   audioBitsPerSecond: 192000,
 });
@@ -80,9 +81,9 @@ const mp3Blob = await Recorder.convert(webmBlob, {
 **方式一：配置时传入回调函数（推荐）**
 
 ```typescript
-import { Recorder } from 'recorder-es';
+import { createRecorder } from 'recorder-es';
 
-const recorder = Recorder.create({
+const recorder = createRecorder({
   timeslice: 100,
   onStart: () => {
     console.log('录音已开始');
@@ -105,7 +106,7 @@ await recorder.start();
 **方式二：使用 onXxx 方法（返回清理函数）**
 
 ```typescript
-const recorder = Recorder.create({ timeslice: 100 });
+const recorder = createRecorder({ timeslice: 100 });
 
 // 使用 on 方法，自动返回清理函数
 const unsubscribe = recorder.onDataAvailable((data, timecode) => {
@@ -123,10 +124,10 @@ unsubscribe();
 适用于实时转译或音频处理场景：
 
 ```typescript
-import { Recorder } from 'recorder-es';
+import { createRecorder } from 'recorder-es';
 
 // 使用配置回调的方式（最简洁）
-const recorder = Recorder.create({
+const recorder = createRecorder({
   timeslice: 100, // 每 100ms 获取数据块，实现低延迟
   onDataAvailable: (data, timecode) => {
     // 通过 WebSocket 发送音频块
@@ -149,7 +150,7 @@ if (stream) {
 ### 暂停和恢复
 
 ```typescript
-const recorder = Recorder.create();
+const recorder = createRecorder();
 
 await recorder.start();
 
@@ -172,7 +173,7 @@ const audioBlob = await recorder.stop();
 ```vue
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue';
-import { Recorder } from 'recorder-es';
+import { createRecorder } from 'recorder-es';
 
 const recorder = ref<Recorder | null>(null);
 const isRecording = ref(false);
@@ -181,7 +182,7 @@ const audioChunks = ref<Blob[]>([]);
 const startRecording = async () => {
   audioChunks.value = [];
   
-  recorder.value = Recorder.create({
+  recorder.value = createRecorder({
     timeslice: 1000,
     onStart: () => {
       isRecording.value = true;
@@ -237,14 +238,14 @@ onUnmounted(() => {
 ```vue
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue';
-import { Recorder, type UnsubscribeFn } from 'recorder-es';
+import { createRecorder, type RecorderInstance, type UnsubscribeFn } from 'recorder-es';
 
-const recorder = ref<Recorder | null>(null);
+const recorder = ref<RecorderInstance | null>(null);
 const isRecording = ref(false);
 const unsubscribes = ref<UnsubscribeFn[]>([]);
 
 const startRecording = async () => {
-  recorder.value = Recorder.create({ timeslice: 1000 });
+  recorder.value = createRecorder({ timeslice: 1000 });
   
   // 使用 on 方法注册事件，并保存清理函数
   unsubscribes.value = [
@@ -298,7 +299,7 @@ onUnmounted(() => {
 ### 检查状态
 
 ```typescript
-const recorder = Recorder.create();
+const recorder = createRecorder();
 
 console.log(recorder.state); // 'inactive'
 
@@ -315,29 +316,64 @@ console.log(recorder.state); // 'recording'
 ### 检查 MIME 类型支持
 
 ```typescript
-import { Recorder } from 'recorder-es';
+import { isTypeSupported } from 'recorder-es';
 
 // 检查是否支持特定格式
-if (Recorder.isTypeSupported('audio/webm;codecs=opus')) {
+if (isTypeSupported('audio/webm;codecs=opus')) {
   console.log('支持 Opus 编码');
 }
 
-if (Recorder.isTypeSupported('audio/mp4')) {
+if (isTypeSupported('audio/mp4')) {
   console.log('支持 MP4 音频');
 }
 ```
 
 ## API
 
-### `Recorder`
+### 核心函数
 
-#### 工厂方法
+#### `createRecorder(options?: RecorderOptions): RecorderInstance`
+
+创建录音器实例的函数。
 
 ```typescript
-Recorder.create(options?: RecorderOptions): Recorder
+import { createRecorder } from 'recorder-es';
+
+const recorder = createRecorder({
+  mimeType: 'audio/webm;codecs=opus',
+  audioBitsPerSecond: 128000,
+  timeslice: 1000,
+  onStart: () => console.log('开始'),
+  onDataAvailable: (data, timecode) => { /* 处理数据 */ },
+});
 ```
 
-#### 配置选项
+#### `isTypeSupported(mimeType: string): boolean`
+
+检查浏览器是否支持指定的 MIME 类型。
+
+```typescript
+import { isTypeSupported } from 'recorder-es';
+
+if (isTypeSupported('audio/webm;codecs=opus')) {
+  // 支持
+}
+```
+
+#### `convertAudio(blob: Blob, options: ConvertOptions): Promise<Blob>`
+
+将录音转换为指定格式。
+
+```typescript
+import { convertAudio } from 'recorder-es';
+
+const mp3Blob = await convertAudio(webmBlob, {
+  format: 'mp3',
+  audioBitsPerSecond: 192000,
+});
+```
+
+### RecorderOptions（配置选项）
 
 ```typescript
 interface RecorderOptions {
@@ -370,6 +406,8 @@ interface RecorderOptions {
 }
 ```
 
+### RecorderInstance（录音器实例）
+
 #### 属性
 
 - `state: RecorderState` - 当前状态 ('inactive' | 'recording' | 'paused')
@@ -378,14 +416,11 @@ interface RecorderOptions {
 
 #### 方法
 
-- `static create(options?: RecorderOptions): Recorder` - 创建录音器实例（工厂方法）
 - `async start(): Promise<void>` - 开始录音
 - `async stop(): Promise<Blob>` - 停止录音并返回音频 blob
 - `pause(): void` - 暂停录音
 - `resume(): void` - 恢复录音
 - `dispose(): void` - 释放所有资源
-- `static isTypeSupported(mimeType: string): boolean` - 检查是否支持 MIME 类型
-- `static async convert(blob: Blob, options: ConvertOptions): Promise<Blob>` - 转换音频格式
 
 #### 事件方法
 
@@ -414,11 +449,11 @@ interface ConvertOptions {
 **使用现代化的配置回调（推荐）：**
 
 ```typescript
-import { Recorder } from 'recorder-es';
+import { createRecorder } from 'recorder-es';
 
 const ws = new WebSocket('wss://transcription-service.example.com');
 
-const recorder = Recorder.create({
+const recorder = createRecorder({
   timeslice: 500,
   onDataAvailable: (data, timecode) => {
     if (ws.readyState === WebSocket.OPEN) {
@@ -438,7 +473,7 @@ await recorder.start();
 **使用 onXxx 方法：**
 
 ```typescript
-const recorder = Recorder.create({ timeslice: 500 });
+const recorder = createRecorder({ timeslice: 500 });
 const ws = new WebSocket('wss://transcription-service.example.com');
 
 const unsubscribe = recorder.onDataAvailable((data, timecode) => {
@@ -461,9 +496,9 @@ await recorder.start();
 ### 语音活动检测
 
 ```typescript
-import { Recorder } from 'recorder-es';
+import { createRecorder } from 'recorder-es';
 
-const recorder = Recorder.create({ timeslice: 100 });
+const recorder = createRecorder({ timeslice: 100 });
 const audioContext = new AudioContext();
 
 await recorder.start();
@@ -494,10 +529,10 @@ if (stream) {
 ### 保存录音并下载
 
 ```typescript
-import { Recorder } from 'recorder-es';
+import { createRecorder } from 'recorder-es';
 
 async function recordAndDownload(duration: number = 5000) {
-  const recorder = Recorder.create();
+  const recorder = createRecorder();
   
   await recorder.start();
   console.log('录音已开始...');
@@ -525,10 +560,10 @@ recordAndDownload();
 ### 录音并转换格式
 
 ```typescript
-import { Recorder } from 'recorder-es';
+import { createRecorder } from 'recorder-es';
 
 async function recordAndConvert() {
-  const recorder = Recorder.create();
+  const recorder = createRecorder();
   
   await recorder.start();
   console.log('录音中...');
@@ -540,7 +575,7 @@ async function recordAndConvert() {
   console.log('录音完成，开始转换...');
   
   // 转换为 MP3
-  const mp3Blob = await Recorder.convert(webmBlob, {
+  const mp3Blob = await convertAudio(webmBlob, {
     format: 'mp3',
     audioBitsPerSecond: 192000,
   });
