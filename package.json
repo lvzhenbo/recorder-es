@@ -1,0 +1,48 @@
+{
+  "name": "recorder-es",
+  "version": "1.0.0",
+  "description": "Modern web audio recording library with real-time streaming support",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "recorder",
+    "audio",
+    "webrtc",
+    "mediarecorder",
+    "recording",
+    "microphone",
+    "real-time",
+    "streaming",
+    "websocket",
+    "typescript",
+    "esm"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "tsdown": "^0.15.12",
+    "typescript": "^5.9.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "mediabunny": "^1.24.3"
+  }
+}

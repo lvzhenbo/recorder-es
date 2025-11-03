@@ -1,0 +1,480 @@
+import type { RecorderOptions, RecorderState, RecorderInstance, ConvertOptions, UnsubscribeFn } from './types.js';
+
+/**
+ * 创建录音器实例
+ * @param options 录音器配置选项
+ * @returns 录音器实例
+ */
+export function createRecorder(options: RecorderOptions = {}): RecorderInstance {
+  // 内部状态
+  let mediaRecorder: MediaRecorder | null = null;
+  let audioStream: MediaStream | null = null;
+  let chunks: Blob[] = [];
+  let audioContext: AudioContext | null = null;
+  let analyser: AnalyserNode | null = null;
+  let volumeCheckInterval: number | null = null;
+  
+  // 配置选项
+  const config = {
+    mimeType: options.mimeType || 'audio/webm;codecs=opus',
+    audioBitsPerSecond: options.audioBitsPerSecond || 128000,
+    timeslice: options.timeslice || 1000,
+    enableVolumeMonitoring: options.enableVolumeMonitoring !== false,
+    volumeUpdateInterval: options.volumeUpdateInterval || 100,
+  };
+  
+  // 事件处理器注册表
+  const startHandlers = new Set<() => void>();
+  const stopHandlers = new Set<() => void>();
+  const pauseHandlers = new Set<() => void>();
+  const resumeHandlers = new Set<() => void>();
+  const dataAvailableHandlers = new Set<(data: Blob, timecode: number) => void>();
+  const errorHandlers = new Set<(error: Error) => void>();
+  const volumeChangeHandlers = new Set<(volume: number) => void>();
+  
+  // 注册配置中的事件处理器
+  if (options.onStart) startHandlers.add(options.onStart);
+  if (options.onStop) stopHandlers.add(options.onStop);
+  if (options.onPause) pauseHandlers.add(options.onPause);
+  if (options.onResume) resumeHandlers.add(options.onResume);
+  if (options.onDataAvailable) dataAvailableHandlers.add(options.onDataAvailable);
+  if (options.onError) errorHandlers.add(options.onError);
+  if (options.onVolumeChange) volumeChangeHandlers.add(options.onVolumeChange);
+  
+  /**
+   * 停止音量监测
+   */
+  function stopVolumeMonitoring(): void {
+    if (volumeCheckInterval !== null) {
+      clearInterval(volumeCheckInterval);
+      volumeCheckInterval = null;
+    }
+    if (audioContext) {
+      audioContext.close();
+      audioContext = null;
+    }
+    analyser = null;
+  }
+  
+  /**
+   * 开始音量监测
+   */
+  function startVolumeMonitoring(stream: MediaStream): void {
+    if (!config.enableVolumeMonitoring || volumeChangeHandlers.size === 0) {
+      return;
+    }
+    
+    try {
+      // 创建音频上下文和分析器
+      audioContext = new AudioContext();
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+      
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      // 定期检测音量
+      volumeCheckInterval = window.setInterval(() => {
+        if (!analyser) return;
+        
+        analyser.getByteFrequencyData(dataArray);
+        
+        // 计算平均音量
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+        
+        // 将音量归一化到 0-100 范围
+        const volume = Math.round((average / 255) * 100);
+        
+        // 通知所有监听器
+        volumeChangeHandlers.forEach(handler => handler(volume));
+      }, config.volumeUpdateInterval);
+    } catch (error) {
+      console.error('音量监测启动失败:', error);
+    }
+  }
+  
+  /**
+   * 清理资源
+   */
+  function cleanup(): void {
+    stopVolumeMonitoring();
+    if (audioStream) {
+      audioStream.getTracks().forEach(track => track.stop());
+      audioStream = null;
+    }
+    mediaRecorder = null;
+    chunks = [];
+  }
+  
+  /**
+   * 开始录音
+   */
+  async function start(): Promise<void> {
+    if (mediaRecorder && getState() !== 'inactive') {
+      throw new Error('录音器已处于活动状态');
+    }
+    
+    try {
+      // 请求麦克风访问权限
+      audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // 查找最佳支持的 MIME 类型
+      let mimeType = config.mimeType;
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        const fallbackTypes = ['audio/webm', 'audio/ogg', 'audio/mp4', 'audio/wav'];
+        for (const type of fallbackTypes) {
+          if (MediaRecorder.isTypeSupported(type)) {
+            mimeType = type;
+            break;
+          }
+        }
+      }
+      
+      // 创建 MediaRecorder
+      mediaRecorder = new MediaRecorder(audioStream, {
+        mimeType,
+        audioBitsPerSecond: config.audioBitsPerSecond,
+      });
+      
+      // 设置事件监听器
+      mediaRecorder.addEventListener('start', () => {
+        startVolumeMonitoring(audioStream!);
+        startHandlers.forEach(handler => handler());
+      });
+      
+      mediaRecorder.addEventListener('stop', () => {
+        stopVolumeMonitoring();
+        stopHandlers.forEach(handler => handler());
+      });
+      
+      mediaRecorder.addEventListener('pause', () => {
+        stopVolumeMonitoring();
+        pauseHandlers.forEach(handler => handler());
+      });
+      
+      mediaRecorder.addEventListener('resume', () => {
+        startVolumeMonitoring(audioStream!);
+        resumeHandlers.forEach(handler => handler());
+      });
+      
+      mediaRecorder.addEventListener('dataavailable', (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+          const timecode = Date.now();
+          dataAvailableHandlers.forEach(handler => handler(event.data, timecode));
+        }
+      });
+      
+      mediaRecorder.addEventListener('error', (event: any) => {
+        const error = event.error || new Error('录音错误');
+        errorHandlers.forEach(handler => handler(error));
+      });
+      
+      // 使用 timeslice 开始录音以获取实时数据
+      mediaRecorder.start(config.timeslice);
+      chunks = [];
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
+  }
+  
+  /**
+   * 停止录音
+   */
+  async function stop(): Promise<Blob> {
+    if (!mediaRecorder || getState() === 'inactive') {
+      throw new Error('录音器未处于活动状态');
+    }
+    
+    return new Promise<Blob>((resolve, reject) => {
+      const handleStop = () => {
+        const blob = new Blob(chunks, { type: getMimeType() });
+        cleanup();
+        resolve(blob);
+      };
+      
+      mediaRecorder!.addEventListener('stop', handleStop, { once: true });
+      
+      try {
+        mediaRecorder!.stop();
+      } catch (error) {
+        mediaRecorder!.removeEventListener('stop', handleStop);
+        reject(error);
+      }
+    });
+  }
+  
+  /**
+   * 暂停录音
+   */
+  function pause(): void {
+    if (!mediaRecorder || getState() !== 'recording') {
+      throw new Error('录音器未在录音中');
+    }
+    mediaRecorder.pause();
+  }
+  
+  /**
+   * 恢复录音
+   */
+  function resume(): void {
+    if (!mediaRecorder || getState() !== 'paused') {
+      throw new Error('录音器未处于暂停状态');
+    }
+    mediaRecorder.resume();
+  }
+  
+  /**
+   * 释放所有资源
+   */
+  function dispose(): void {
+    if (mediaRecorder && getState() !== 'inactive') {
+      mediaRecorder.stop();
+    }
+    cleanup();
+  }
+  
+  /**
+   * 获取当前状态
+   */
+  function getState(): RecorderState {
+    if (!mediaRecorder) {
+      return 'inactive';
+    }
+    return mediaRecorder.state;
+  }
+  
+  /**
+   * 获取 MIME 类型
+   */
+  function getMimeType(): string {
+    return mediaRecorder?.mimeType || config.mimeType;
+  }
+  
+  /**
+   * 获取音频流
+   */
+  function getStream(): MediaStream | null {
+    return audioStream;
+  }
+  
+  // 返回录音器实例
+  return {
+    get state() {
+      return getState();
+    },
+    get stream() {
+      return getStream();
+    },
+    get mimeType() {
+      return getMimeType();
+    },
+    start,
+    stop,
+    pause,
+    resume,
+    dispose,
+    onStart: (handler) => {
+      startHandlers.add(handler);
+      return () => startHandlers.delete(handler);
+    },
+    onStop: (handler) => {
+      stopHandlers.add(handler);
+      return () => stopHandlers.delete(handler);
+    },
+    onPause: (handler) => {
+      pauseHandlers.add(handler);
+      return () => pauseHandlers.delete(handler);
+    },
+    onResume: (handler) => {
+      resumeHandlers.add(handler);
+      return () => resumeHandlers.delete(handler);
+    },
+    onDataAvailable: (handler) => {
+      dataAvailableHandlers.add(handler);
+      return () => dataAvailableHandlers.delete(handler);
+    },
+    onError: (handler) => {
+      errorHandlers.add(handler);
+      return () => errorHandlers.delete(handler);
+    },
+    onVolumeChange: (handler) => {
+      volumeChangeHandlers.add(handler);
+      return () => volumeChangeHandlers.delete(handler);
+    },
+  };
+}
+
+/**
+ * 检查浏览器是否支持指定的 MIME 类型
+ * @param mimeType MIME 类型
+ * @returns 是否支持
+ */
+export function isTypeSupported(mimeType: string): boolean {
+  return MediaRecorder.isTypeSupported(mimeType);
+}
+
+/**
+ * 将录音转换为指定格式
+ * 使用 mediabunny 库进行格式转换
+ * 
+ * 注意：MP3 格式需要额外安装 @mediabunny/mp3-encoder 扩展
+ * 详见：https://mediabunny.dev/guide/output-formats#mp3
+ * 
+ * @param blob 原始录音 Blob
+ * @param options 转换选项
+ * @returns 返回转换后的音频 Blob 的 Promise
+ * @throws 如果转换失败或格式不支持（例如 MP3 未安装编码器）
+ */
+export async function convertAudio(blob: Blob, options: ConvertOptions): Promise<Blob> {
+  // 动态导入 mediabunny 以避免打包时的依赖问题
+  const { 
+    Input, 
+    Output, 
+    BlobSource, 
+    BufferTarget, 
+    ALL_FORMATS,
+    Conversion,
+    WebMOutputFormat,
+    Mp4OutputFormat,
+    MovOutputFormat,
+    MkvOutputFormat,
+    OggOutputFormat,
+    Mp3OutputFormat,
+    WavOutputFormat,
+    AdtsOutputFormat,
+    FlacOutputFormat,
+    canEncodeAudio,
+  } = await import('mediabunny');
+  
+  // MP3 格式特殊处理
+  if (options.format === 'mp3') {
+    try {
+      // 检查是否有原生支持
+      const hasNativeSupport = await canEncodeAudio('mp3');
+      
+      if (!hasNativeSupport) {
+        // 尝试导入并注册 mp3-encoder
+        const { registerMp3Encoder } = await import('@mediabunny/mp3-encoder');
+        registerMp3Encoder();
+      }
+    } catch (e) {
+      throw new Error(
+        'MP3 格式需要安装 @mediabunny/mp3-encoder 扩展。\n' +
+        '请运行: npm install @mediabunny/mp3-encoder\n' +
+        '详见: https://mediabunny.dev/guide/output-formats#mp3'
+      );
+    }
+  }
+  
+  try {
+    // 使用 mediabunny 读取输入文件
+    const input = new Input({
+      source: new BlobSource(blob),
+      formats: ALL_FORMATS,
+    });
+    
+    // 根据目标格式创建输出配置
+    const target = new BufferTarget();
+    let outputFormat: any;
+    
+    // 创建对应的输出格式实例
+    switch (options.format) {
+      case 'mp4':
+        outputFormat = new Mp4OutputFormat();
+        break;
+      case 'mov':
+        outputFormat = new MovOutputFormat();
+        break;
+      case 'mkv':
+        outputFormat = new MkvOutputFormat();
+        break;
+      case 'webm':
+        outputFormat = new WebMOutputFormat();
+        break;
+      case 'ogg':
+        outputFormat = new OggOutputFormat();
+        break;
+      case 'mp3':
+        outputFormat = new Mp3OutputFormat();
+        break;
+      case 'wav':
+        outputFormat = new WavOutputFormat();
+        break;
+      case 'aac':
+        outputFormat = new AdtsOutputFormat();
+        break;
+      case 'flac':
+        outputFormat = new FlacOutputFormat();
+        break;
+      default:
+        outputFormat = new WebMOutputFormat();
+    }
+    
+    // 创建输出实例
+    const output = new Output({
+      format: outputFormat,
+      target,
+    });
+    
+    // 创建并执行转换
+    const conversion = await Conversion.init({
+      input,
+      output,
+    });
+    
+    if (!conversion.isValid) {
+      // 检查是否有被丢弃的轨道
+      if (conversion.discardedTracks.length > 0) {
+        const reasons = conversion.discardedTracks.map(t => t.reason).join(', ');
+        throw new Error(`转换无效：${reasons}`);
+      }
+      throw new Error('转换无效：无法执行转换');
+    }
+    
+    // 执行转换
+    await conversion.execute();
+    
+    // 获取输出缓冲区
+    const buffer = target.buffer;
+    
+    if (!buffer) {
+      throw new Error('转换失败：未生成输出缓冲区');
+    }
+    
+    // 根据格式创建正确的 MIME 类型
+    let mimeType = `audio/${options.format}`;
+    if (options.format === 'webm') {
+      mimeType = 'audio/webm';
+    } else if (options.format === 'mp4' || options.format === 'mov') {
+      mimeType = 'audio/mp4';
+    } else if (options.format === 'mkv') {
+      mimeType = 'audio/x-matroska';
+    } else if (options.format === 'wav') {
+      mimeType = 'audio/wav';
+    } else if (options.format === 'mp3') {
+      mimeType = 'audio/mpeg';
+    } else if (options.format === 'ogg') {
+      mimeType = 'audio/ogg';
+    } else if (options.format === 'flac') {
+      mimeType = 'audio/flac';
+    } else if (options.format === 'aac') {
+      mimeType = 'audio/aac';
+    }
+    
+    // 将 ArrayBuffer 转换为 Blob
+    const resultBlob = new Blob([buffer], { type: mimeType });
+    
+    return resultBlob;
+  } catch (error) {
+    throw new Error(`格式转换失败: ${error}`);
+  }
+}

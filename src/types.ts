@@ -1,0 +1,199 @@
+/**
+ * 事件监听器清理函数
+ */
+export type UnsubscribeFn = () => void;
+
+/**
+ * 录音器状态
+ */
+export type RecorderState = 'inactive' | 'recording' | 'paused';
+
+/**
+ * 录音器实例接口
+ */
+export interface RecorderInstance {
+  /**
+   * 获取录音器当前状态
+   */
+  readonly state: RecorderState;
+  
+  /**
+   * 获取音频流（录音时可用）
+   */
+  readonly stream: MediaStream | null;
+  
+  /**
+   * 获取正在使用的 MIME 类型
+   */
+  readonly mimeType: string;
+  
+  /**
+   * 开始录音
+   */
+  start(): Promise<void>;
+  
+  /**
+   * 停止录音并返回音频 Blob
+   */
+  stop(): Promise<Blob>;
+  
+  /**
+   * 暂停录音
+   */
+  pause(): void;
+  
+  /**
+   * 恢复录音
+   */
+  resume(): void;
+  
+  /**
+   * 释放所有资源
+   */
+  dispose(): void;
+  
+  /**
+   * 监听录音开始事件
+   */
+  onStart(handler: () => void): UnsubscribeFn;
+  
+  /**
+   * 监听录音停止事件
+   */
+  onStop(handler: () => void): UnsubscribeFn;
+  
+  /**
+   * 监听录音暂停事件
+   */
+  onPause(handler: () => void): UnsubscribeFn;
+  
+  /**
+   * 监听录音恢复事件
+   */
+  onResume(handler: () => void): UnsubscribeFn;
+  
+  /**
+   * 监听音频数据可用事件
+   */
+  onDataAvailable(handler: (data: Blob, timecode: number) => void): UnsubscribeFn;
+  
+  /**
+   * 监听音量级别变化事件
+   */
+  onVolumeChange(handler: (volume: number) => void): UnsubscribeFn;
+  
+  /**
+   * 监听错误事件
+   */
+  onError(handler: (error: Error) => void): UnsubscribeFn;
+}
+
+/**
+ * 事件处理器类型
+ */
+export interface RecorderEventHandlers {
+  /**
+   * 录音开始时的回调
+   */
+  onStart?: () => void;
+
+  /**
+   * 录音停止时的回调
+   */
+  onStop?: () => void;
+
+  /**
+   * 录音暂停时的回调
+   */
+  onPause?: () => void;
+
+  /**
+   * 录音恢复时的回调
+   */
+  onResume?: () => void;
+
+  /**
+   * 音频数据可用时的回调
+   */
+  onDataAvailable?: (data: Blob, timecode: number) => void;
+
+  /**
+   * 发生错误时的回调
+   */
+  onError?: (error: Error) => void;
+
+  /**
+   * 音量级别变化时的回调
+   * @param volume 音量级别 (0-100)
+   */
+  onVolumeChange?: (volume: number) => void;
+}
+
+/**
+ * 录音器配置选项
+ */
+export interface RecorderOptions extends RecorderEventHandlers {
+  /**
+   * 录音使用的音频 MIME 类型
+   * @default 'audio/webm;codecs=opus'
+   */
+  mimeType?: string;
+
+  /**
+   * 目标音频比特率（每秒比特数）
+   * @default 128000
+   */
+  audioBitsPerSecond?: number;
+
+  /**
+   * 切片音频数据的时间间隔（毫秒）
+   * 用于实时流场景
+   * @default 1000
+   */
+  timeslice?: number;
+
+  /**
+   * 是否启用音量监测
+   * @default true
+   */
+  enableVolumeMonitoring?: boolean;
+
+  /**
+   * 音量更新频率（毫秒）
+   * @default 100
+   */
+  volumeUpdateInterval?: number;
+}
+
+/**
+ * 支持的输出格式
+ * 基于 mediabunny 支持的所有容器格式
+ * 
+ * 注意：MP3 格式需要额外安装 @mediabunny/mp3-encoder 扩展
+ * 详见：https://mediabunny.dev/guide/output-formats#mp3
+ */
+export type OutputFormat = 
+  | 'webm'  // WebM 容器
+  | 'mp4'   // MPEG-4 容器（也支持 .m4v, .m4a）
+  | 'mov'   // QuickTime 文件格式
+  | 'mkv'   // Matroska 容器
+  | 'ogg'   // Ogg 容器
+  | 'mp3'   // MP3 音频（需要 @mediabunny/mp3-encoder）
+  | 'wav'   // WAVE 音频
+  | 'aac'   // AAC 音频（ADTS 格式）
+  | 'flac'; // FLAC 无损音频
+
+/**
+ * 格式转换选项
+ */
+export interface ConvertOptions {
+  /**
+   * 目标格式
+   */
+  format: OutputFormat;
+
+  /**
+   * 音频比特率（可选）
+   */
+  audioBitsPerSecond?: number;
+}

@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recorder ES - 基础示例</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+    }
+    .controls {
+      margin: 20px 0;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      transition: background 0.3s;
+    }
+    button:hover:not(:disabled) {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .status {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 5px;
+      border-left: 4px solid #007bff;
+    }
+    .recordings {
+      margin-top: 30px;
+    }
+    .recording-item {
+      padding: 10px;
+      margin: 10px 0;
+      background: #f8f9fa;
+      border-radius: 5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    audio {
+      flex: 1;
+    }
+    .download-btn {
+      padding: 8px 16px;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎙️ Recorder ES - 基础示例</h1>
+  
+  <div class="controls">
+    <button id="startBtn">开始录音</button>
+    <button id="pauseBtn" disabled>暂停</button>
+    <button id="resumeBtn" disabled>恢复</button>
+    <button id="stopBtn" disabled>停止录音</button>
+  </div>
+
+  <div class="status">
+    <strong>状态:</strong> <span id="status">未激活</span><br>
+    <strong>录音状态:</strong> <span id="state">inactive</span><br>
+    <strong>时长:</strong> <span id="duration">0</span>秒<br>
+    <strong>音量:</strong> 
+    <div style="display: inline-block; width: 200px; height: 20px; background: #e0e0e0; border-radius: 10px; overflow: hidden; vertical-align: middle;">
+      <div id="volumeBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #4caf50, #8bc34a); transition: width 0.1s;"></div>
+    </div>
+    <span id="volumeText">0%</span>
+  </div>
+
+  <div class="recordings" id="recordings">
+    <h2>录音列表</h2>
+    <p id="noRecordings">暂无录音。点击"开始录音"开始录制。</p>
+  </div>
+
+  <script type="module">
+    import { createRecorder } from '../dist/index.js';
+
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const resumeBtn = document.getElementById('resumeBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const statusEl = document.getElementById('status');
+    const stateEl = document.getElementById('state');
+    const durationEl = document.getElementById('duration');
+    const volumeBar = document.getElementById('volumeBar');
+    const volumeText = document.getElementById('volumeText');
+    const recordingsEl = document.getElementById('recordings');
+    const noRecordingsEl = document.getElementById('noRecordings');
+
+    let recorder = null;
+    let startTime = 0;
+    let durationInterval = null;
+
+    function updateButtons() {
+      const state = recorder ? recorder.state : 'inactive';
+      stateEl.textContent = state;
+
+      startBtn.disabled = state !== 'inactive';
+      pauseBtn.disabled = state !== 'recording';
+      resumeBtn.disabled = state !== 'paused';
+      stopBtn.disabled = state === 'inactive';
+    }
+
+    function updateDuration() {
+      if (recorder && recorder.state === 'recording') {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        durationEl.textContent = elapsed;
+      }
+    }
+
+    function addRecording(blob) {
+      const url = URL.createObjectURL(blob);
+      const timestamp = new Date().toLocaleString('zh-CN');
+      
+      noRecordingsEl.style.display = 'none';
+
+      const div = document.createElement('div');
+      div.className = 'recording-item';
+      div.innerHTML = `
+        <audio controls src="${url}"></audio>
+        <button class="download-btn" onclick="downloadRecording('${url}', '${timestamp}')">
+          下载
+        </button>
+      `;
+      
+      recordingsEl.appendChild(div);
+    }
+
+    window.downloadRecording = function(url, timestamp) {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `recording-${timestamp.replace(/[/:]/g, '-')}.webm`;
+      a.click();
+    };
+
+    startBtn.addEventListener('click', async () => {
+      try {
+        // 使用createRecorder函数和配置回调创建录音器实例
+        recorder = createRecorder({
+          audioBitsPerSecond: 128000,
+          timeslice: 1000,
+          enableVolumeMonitoring: true,
+          volumeUpdateInterval: 50,
+          onStart: () => {
+            statusEl.textContent = '录音中...';
+            startTime = Date.now();
+            durationInterval = setInterval(updateDuration, 100);
+            updateButtons();
+          },
+          onStop: () => {
+            statusEl.textContent = '录音已停止';
+            clearInterval(durationInterval);
+            durationEl.textContent = '0';
+            volumeBar.style.width = '0%';
+            volumeText.textContent = '0%';
+            updateButtons();
+          },
+          onPause: () => {
+            statusEl.textContent = '录音已暂停';
+            clearInterval(durationInterval);
+            volumeBar.style.width = '0%';
+            volumeText.textContent = '0%';
+            updateButtons();
+          },
+          onResume: () => {
+            statusEl.textContent = '录音中...';
+            durationInterval = setInterval(updateDuration, 100);
+            updateButtons();
+          },
+          onVolumeChange: (volume) => {
+            volumeBar.style.width = `${volume}%`;
+            volumeText.textContent = `${volume}%`;
+          },
+          onError: (error) => {
+            statusEl.textContent = `错误: ${error.message}`;
+            console.error('录音错误:', error);
+          },
+        });
+
+        await recorder.start();
+      } catch (error) {
+        statusEl.textContent = `错误: ${error.message}`;
+        console.error('启动录音失败:', error);
+      }
+    });
+
+    pauseBtn.addEventListener('click', () => {
+      if (recorder) {
+        recorder.pause();
+      }
+    });
+
+    resumeBtn.addEventListener('click', () => {
+      if (recorder) {
+        recorder.resume();
+      }
+    });
+
+    stopBtn.addEventListener('click', async () => {
+      if (recorder) {
+        try {
+          const blob = await recorder.stop();
+          addRecording(blob);
+          recorder.dispose();
+          recorder = null;
+        } catch (error) {
+          statusEl.textContent = `错误: ${error.message}`;
+          console.error('停止录音失败:', error);
+        }
+      }
+    });
+
+    // 初始化按钮状态
+    updateButtons();
+  </script>
+</body>
+</html>
