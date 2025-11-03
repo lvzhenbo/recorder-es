@@ -336,13 +336,36 @@ export function isTypeSupported(mimeType: string): boolean {
  */
 export async function convertAudio(blob: Blob, options: ConvertOptions): Promise<Blob> {
   // 动态导入 mediabunny 以避免打包时的依赖问题
-  const { Input, Output, BlobSource, BufferTarget, ALL_FORMATS } = await import('mediabunny');
+  const { 
+    Input, 
+    Output, 
+    BlobSource, 
+    BufferTarget, 
+    ALL_FORMATS,
+    Conversion,
+    WebMOutputFormat,
+    Mp4OutputFormat,
+    MovOutputFormat,
+    MkvOutputFormat,
+    OggOutputFormat,
+    Mp3OutputFormat,
+    WavOutputFormat,
+    AdtsOutputFormat,
+    FlacOutputFormat,
+    canEncodeAudio,
+  } = await import('mediabunny');
   
-  // MP3 格式特殊提示
+  // MP3 格式特殊处理
   if (options.format === 'mp3') {
     try {
-      // 尝试导入 mp3-encoder 以检查是否可用
-      await import('@mediabunny/mp3-encoder');
+      // 检查是否有原生支持
+      const hasNativeSupport = await canEncodeAudio('mp3');
+      
+      if (!hasNativeSupport) {
+        // 尝试导入并注册 mp3-encoder
+        const { registerMp3Encoder } = await import('@mediabunny/mp3-encoder');
+        registerMp3Encoder();
+      }
     } catch (e) {
       throw new Error(
         'MP3 格式需要安装 @mediabunny/mp3-encoder 扩展。\n' +
@@ -363,44 +386,62 @@ export async function convertAudio(blob: Blob, options: ConvertOptions): Promise
     const target = new BufferTarget();
     let outputFormat: any;
     
+    // 创建对应的输出格式实例
     switch (options.format) {
       case 'mp4':
-        outputFormat = 'mp4';
+        outputFormat = new Mp4OutputFormat();
+        break;
+      case 'mov':
+        outputFormat = new MovOutputFormat();
+        break;
+      case 'mkv':
+        outputFormat = new MkvOutputFormat();
         break;
       case 'webm':
-        outputFormat = 'webm';
-        break;
-      case 'wav':
-        outputFormat = 'wav';
-        break;
-      case 'mp3':
-        outputFormat = 'mp3';
+        outputFormat = new WebMOutputFormat();
         break;
       case 'ogg':
-        outputFormat = 'ogg';
+        outputFormat = new OggOutputFormat();
+        break;
+      case 'mp3':
+        outputFormat = new Mp3OutputFormat();
+        break;
+      case 'wav':
+        outputFormat = new WavOutputFormat();
+        break;
+      case 'aac':
+        outputFormat = new AdtsOutputFormat();
         break;
       case 'flac':
-        outputFormat = 'flac';
+        outputFormat = new FlacOutputFormat();
         break;
       default:
-        outputFormat = 'webm';
+        outputFormat = new WebMOutputFormat();
     }
     
     // 创建输出实例
     const output = new Output({
-      target,
       format: outputFormat,
+      target,
     });
     
-    // 获取输入音频轨道
-    const audioTrack = await input.getPrimaryAudioTrack();
+    // 创建并执行转换
+    const conversion = await Conversion.init({
+      input,
+      output,
+    });
     
-    if (!audioTrack) {
-      throw new Error('未找到音频轨道');
+    if (!conversion.isValid) {
+      // 检查是否有被丢弃的轨道
+      if (conversion.discardedTracks.length > 0) {
+        const reasons = conversion.discardedTracks.map(t => t.reason).join(', ');
+        throw new Error(`转换无效：${reasons}`);
+      }
+      throw new Error('转换无效：无法执行转换');
     }
     
-    // 完成输出
-    await output.finalize();
+    // 执行转换
+    await conversion.execute();
     
     // 获取输出缓冲区
     const buffer = target.buffer;
@@ -413,8 +454,10 @@ export async function convertAudio(blob: Blob, options: ConvertOptions): Promise
     let mimeType = `audio/${options.format}`;
     if (options.format === 'webm') {
       mimeType = 'audio/webm';
-    } else if (options.format === 'mp4') {
+    } else if (options.format === 'mp4' || options.format === 'mov') {
       mimeType = 'audio/mp4';
+    } else if (options.format === 'mkv') {
+      mimeType = 'audio/x-matroska';
     } else if (options.format === 'wav') {
       mimeType = 'audio/wav';
     } else if (options.format === 'mp3') {
@@ -423,6 +466,8 @@ export async function convertAudio(blob: Blob, options: ConvertOptions): Promise
       mimeType = 'audio/ogg';
     } else if (options.format === 'flac') {
       mimeType = 'audio/flac';
+    } else if (options.format === 'aac') {
+      mimeType = 'audio/aac';
     }
     
     // 将 ArrayBuffer 转换为 Blob
