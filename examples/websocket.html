@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recorder ES - WebSocket Streaming Example</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    h1 {
+      color: #333;
+    }
+    .controls {
+      margin: 20px 0;
+    }
+    button {
+      padding: 10px 20px;
+      margin: 5px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      transition: background 0.3s;
+    }
+    button:hover:not(:disabled) {
+      background: #0056b3;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .status {
+      margin: 20px 0;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 5px;
+      border-left: 4px solid #007bff;
+    }
+    .log {
+      margin-top: 30px;
+      padding: 15px;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 5px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .log-entry {
+      margin: 5px 0;
+      padding: 5px;
+      border-left: 3px solid #007bff;
+      padding-left: 10px;
+    }
+    .log-entry.sent {
+      border-left-color: #28a745;
+    }
+    .log-entry.received {
+      border-left-color: #ffc107;
+    }
+    .log-entry.error {
+      border-left-color: #dc3545;
+    }
+    .info-box {
+      margin: 20px 0;
+      padding: 15px;
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 5px;
+      color: #856404;
+    }
+  </style>
+</head>
+<body>
+  <h1>🌐 Recorder ES - WebSocket Streaming</h1>
+  
+  <div class="info-box">
+    <strong>Note:</strong> This example demonstrates real-time audio streaming to a WebSocket server.
+    For demonstration purposes, it simulates a WebSocket connection (echo server).
+    In a real application, you would connect to your actual transcription or processing service.
+  </div>
+
+  <div class="controls">
+    <button id="connectBtn">Connect</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+    <button id="startBtn" disabled>Start Streaming</button>
+    <button id="stopBtn" disabled>Stop Streaming</button>
+  </div>
+
+  <div class="status">
+    <strong>Connection:</strong> <span id="connectionStatus">Disconnected</span><br>
+    <strong>Recording:</strong> <span id="recordingStatus">Inactive</span><br>
+    <strong>Chunks Sent:</strong> <span id="chunkCount">0</span><br>
+    <strong>Data Sent:</strong> <span id="dataSent">0</span> bytes
+  </div>
+
+  <div class="log" id="log">
+    <div class="log-entry">Waiting for connection...</div>
+  </div>
+
+  <script type="module">
+    import { Recorder } from '../dist/index.js';
+
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const connectionStatusEl = document.getElementById('connectionStatus');
+    const recordingStatusEl = document.getElementById('recordingStatus');
+    const chunkCountEl = document.getElementById('chunkCount');
+    const dataSentEl = document.getElementById('dataSent');
+    const logEl = document.getElementById('log');
+
+    let recorder = null;
+    let ws = null;
+    let chunkCount = 0;
+    let totalDataSent = 0;
+
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function updateButtons() {
+      const connected = ws && ws.readyState === WebSocket.OPEN;
+      const recording = recorder && recorder.state === 'recording';
+
+      connectBtn.disabled = connected;
+      disconnectBtn.disabled = !connected;
+      startBtn.disabled = !connected || recording;
+      stopBtn.disabled = !recording;
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    // Simulate WebSocket for demonstration
+    // In a real app, use: ws = new WebSocket('wss://your-server.com/audio');
+    class MockWebSocket {
+      constructor(url) {
+        this.url = url;
+        this.readyState = WebSocket.CONNECTING;
+        this.onopen = null;
+        this.onclose = null;
+        this.onmessage = null;
+        this.onerror = null;
+
+        // Simulate connection
+        setTimeout(() => {
+          this.readyState = WebSocket.OPEN;
+          if (this.onopen) this.onopen({ type: 'open' });
+        }, 500);
+      }
+
+      send(data) {
+        if (this.readyState !== WebSocket.OPEN) {
+          throw new Error('WebSocket is not open');
+        }
+        
+        // Simulate server response
+        setTimeout(() => {
+          if (this.onmessage) {
+            this.onmessage({
+              type: 'message',
+              data: JSON.stringify({
+                status: 'received',
+                size: data.size,
+                timestamp: Date.now(),
+              })
+            });
+          }
+        }, 10);
+      }
+
+      close() {
+        this.readyState = WebSocket.CLOSED;
+        if (this.onclose) this.onclose({ type: 'close' });
+      }
+    }
+
+    connectBtn.addEventListener('click', () => {
+      log('Connecting to server...', 'info');
+      connectionStatusEl.textContent = 'Connecting...';
+
+      // For demo purposes, use mock WebSocket
+      // In production: ws = new WebSocket('wss://your-server.com/audio');
+      ws = new MockWebSocket('wss://demo.example.com/audio');
+
+      ws.onopen = () => {
+        log('Connected to server', 'info');
+        connectionStatusEl.textContent = 'Connected';
+        updateButtons();
+      };
+
+      ws.onclose = () => {
+        log('Disconnected from server', 'info');
+        connectionStatusEl.textContent = 'Disconnected';
+        ws = null;
+        updateButtons();
+      };
+
+      ws.onerror = (error) => {
+        log('Connection error: ' + error.message, 'error');
+        connectionStatusEl.textContent = 'Error';
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          log(`Server response: ${data.status}, size: ${formatBytes(data.size)}`, 'received');
+        } catch (e) {
+          log('Received: ' + event.data, 'received');
+        }
+      };
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      if (ws) {
+        ws.close();
+        log('Closing connection...', 'info');
+      }
+    });
+
+    startBtn.addEventListener('click', async () => {
+      try {
+        recorder = new Recorder({
+          audioBitsPerSecond: 64000, // Lower bitrate for streaming
+          timeslice: 100, // Get chunks every 100ms for low latency
+        });
+
+        chunkCount = 0;
+        totalDataSent = 0;
+        chunkCountEl.textContent = '0';
+        dataSentEl.textContent = '0';
+
+        recorder.addEventListener('dataavailable', (event) => {
+          if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+            try {
+              ws.send(event.data);
+              chunkCount++;
+              totalDataSent += event.data.size;
+              chunkCountEl.textContent = chunkCount;
+              dataSentEl.textContent = formatBytes(totalDataSent);
+              log(`Sent chunk #${chunkCount}: ${formatBytes(event.data.size)}`, 'sent');
+            } catch (error) {
+              log('Failed to send chunk: ' + error.message, 'error');
+            }
+          }
+        });
+
+        recorder.addEventListener('start', () => {
+          recordingStatusEl.textContent = 'Recording';
+          log('Started recording and streaming', 'info');
+          updateButtons();
+        });
+
+        recorder.addEventListener('stop', () => {
+          recordingStatusEl.textContent = 'Stopped';
+          log('Stopped recording', 'info');
+          updateButtons();
+        });
+
+        recorder.addEventListener('error', (event) => {
+          log('Recording error: ' + event.error.message, 'error');
+        });
+
+        await recorder.start();
+        log('Requesting microphone access...', 'info');
+      } catch (error) {
+        log('Failed to start recording: ' + error.message, 'error');
+        recordingStatusEl.textContent = 'Error';
+      }
+    });
+
+    stopBtn.addEventListener('click', async () => {
+      if (recorder) {
+        try {
+          await recorder.stop();
+          recorder.dispose();
+          recorder = null;
+          log('Recording stopped, final summary:', 'info');
+          log(`Total chunks: ${chunkCount}, Total data: ${formatBytes(totalDataSent)}`, 'info');
+        } catch (error) {
+          log('Failed to stop recording: ' + error.message, 'error');
+        }
+      }
+    });
+
+    // Initialize
+    updateButtons();
+    log('Ready. Click "Connect" to begin.', 'info');
+  </script>
+</body>
+</html>
