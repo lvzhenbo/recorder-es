@@ -1,42 +1,40 @@
-import type { RecorderOptions, RecorderState, RecorderEventMap, ConvertOptions, UnsubscribeFn } from './types.js';
-import { BlobEvent } from './types.js';
+import type { RecorderOptions, RecorderState, ConvertOptions, UnsubscribeFn } from './types.js';
 
 /**
  * 现代网页录音器，支持实时流传输
  */
-export class Recorder extends EventTarget {
+export class Recorder {
   private mediaRecorder: MediaRecorder | null = null;
   private audioStream: MediaStream | null = null;
   private chunks: Blob[] = [];
   private options: Required<Omit<RecorderOptions, 'onStart' | 'onStop' | 'onPause' | 'onResume' | 'onDataAvailable' | 'onError'>>;
-  private eventHandlers: {
-    onStart?: () => void;
-    onStop?: () => void;
-    onPause?: () => void;
-    onResume?: () => void;
-    onDataAvailable?: (data: Blob, timecode: number) => void;
-    onError?: (error: Error) => void;
-  } = {};
+  
+  // 事件处理器注册表
+  private startHandlers: Set<() => void> = new Set();
+  private stopHandlers: Set<() => void> = new Set();
+  private pauseHandlers: Set<() => void> = new Set();
+  private resumeHandlers: Set<() => void> = new Set();
+  private dataAvailableHandlers: Set<(data: Blob, timecode: number) => void> = new Set();
+  private errorHandlers: Set<(error: Error) => void> = new Set();
 
   /**
    * 私有构造函数，使用工厂方法创建实例
    * @param options 录音器配置选项
    */
   private constructor(options: RecorderOptions = {}) {
-    super();
     this.options = {
       mimeType: options.mimeType || 'audio/webm;codecs=opus',
       audioBitsPerSecond: options.audioBitsPerSecond || 128000,
       timeslice: options.timeslice || 1000,
     };
     
-    // 保存事件处理器
-    if (options.onStart) this.eventHandlers.onStart = options.onStart;
-    if (options.onStop) this.eventHandlers.onStop = options.onStop;
-    if (options.onPause) this.eventHandlers.onPause = options.onPause;
-    if (options.onResume) this.eventHandlers.onResume = options.onResume;
-    if (options.onDataAvailable) this.eventHandlers.onDataAvailable = options.onDataAvailable;
-    if (options.onError) this.eventHandlers.onError = options.onError;
+    // 注册配置中的事件处理器
+    if (options.onStart) this.startHandlers.add(options.onStart);
+    if (options.onStop) this.stopHandlers.add(options.onStop);
+    if (options.onPause) this.pauseHandlers.add(options.onPause);
+    if (options.onResume) this.resumeHandlers.add(options.onResume);
+    if (options.onDataAvailable) this.dataAvailableHandlers.add(options.onDataAvailable);
+    if (options.onError) this.errorHandlers.add(options.onError);
   }
 
   /**
@@ -120,24 +118,20 @@ export class Recorder extends EventTarget {
       });
 
       // 设置事件监听器
-      this.mediaRecorder.addEventListener('start', (event) => {
-        this.dispatchEvent(new Event('start'));
-        this.eventHandlers.onStart?.();
+      this.mediaRecorder.addEventListener('start', () => {
+        this.startHandlers.forEach(handler => handler());
       });
 
-      this.mediaRecorder.addEventListener('stop', (event) => {
-        this.dispatchEvent(new Event('stop'));
-        this.eventHandlers.onStop?.();
+      this.mediaRecorder.addEventListener('stop', () => {
+        this.stopHandlers.forEach(handler => handler());
       });
 
-      this.mediaRecorder.addEventListener('pause', (event) => {
-        this.dispatchEvent(new Event('pause'));
-        this.eventHandlers.onPause?.();
+      this.mediaRecorder.addEventListener('pause', () => {
+        this.pauseHandlers.forEach(handler => handler());
       });
 
-      this.mediaRecorder.addEventListener('resume', (event) => {
-        this.dispatchEvent(new Event('resume'));
-        this.eventHandlers.onResume?.();
+      this.mediaRecorder.addEventListener('resume', () => {
+        this.resumeHandlers.forEach(handler => handler());
       });
 
       this.mediaRecorder.addEventListener('dataavailable', (event) => {
@@ -145,21 +139,13 @@ export class Recorder extends EventTarget {
           this.chunks.push(event.data);
           
           const timecode = Date.now();
-          // 分发包含 blob 数据的自定义事件
-          const blobEvent = new BlobEvent('dataavailable', event.data, timecode);
-          this.dispatchEvent(blobEvent);
-          this.eventHandlers.onDataAvailable?.(event.data, timecode);
+          this.dataAvailableHandlers.forEach(handler => handler(event.data, timecode));
         }
       });
 
       this.mediaRecorder.addEventListener('error', (event: any) => {
         const error = event.error || new Error('录音错误');
-        const errorEvent = new ErrorEvent('error', {
-          error,
-          message: error.message || '录音错误',
-        });
-        this.dispatchEvent(errorEvent);
-        this.eventHandlers.onError?.(error);
+        this.errorHandlers.forEach(handler => handler(error));
       });
 
       // 使用 timeslice 开始录音以获取实时数据
@@ -320,91 +306,63 @@ export class Recorder extends EventTarget {
   }
 
   /**
-   * 为录音器事件添加事件监听器
-   */
-  addEventListener<K extends keyof RecorderEventMap>(
-    type: K,
-    listener: (event: RecorderEventMap[K]) => void,
-    options?: boolean | AddEventListenerOptions
-  ): void {
-    super.addEventListener(type, listener as EventListener, options);
-  }
-
-  /**
-   * 移除录音器事件的事件监听器
-   */
-  removeEventListener<K extends keyof RecorderEventMap>(
-    type: K,
-    listener: (event: RecorderEventMap[K]) => void,
-    options?: boolean | EventListenerOptions
-  ): void {
-    super.removeEventListener(type, listener as EventListener, options);
-  }
-
-  /**
-   * 监听录音开始事件（现代 API）
+   * 监听录音开始事件
    * @param handler 事件处理函数
    * @returns 取消订阅函数
    */
   onStart(handler: () => void): UnsubscribeFn {
-    const listener = () => handler();
-    this.addEventListener('start', listener);
-    return () => this.removeEventListener('start', listener);
+    this.startHandlers.add(handler);
+    return () => this.startHandlers.delete(handler);
   }
 
   /**
-   * 监听录音停止事件（现代 API）
+   * 监听录音停止事件
    * @param handler 事件处理函数
    * @returns 取消订阅函数
    */
   onStop(handler: () => void): UnsubscribeFn {
-    const listener = () => handler();
-    this.addEventListener('stop', listener);
-    return () => this.removeEventListener('stop', listener);
+    this.stopHandlers.add(handler);
+    return () => this.stopHandlers.delete(handler);
   }
 
   /**
-   * 监听录音暂停事件（现代 API）
+   * 监听录音暂停事件
    * @param handler 事件处理函数
    * @returns 取消订阅函数
    */
   onPause(handler: () => void): UnsubscribeFn {
-    const listener = () => handler();
-    this.addEventListener('pause', listener);
-    return () => this.removeEventListener('pause', listener);
+    this.pauseHandlers.add(handler);
+    return () => this.pauseHandlers.delete(handler);
   }
 
   /**
-   * 监听录音恢复事件（现代 API）
+   * 监听录音恢复事件
    * @param handler 事件处理函数
    * @returns 取消订阅函数
    */
   onResume(handler: () => void): UnsubscribeFn {
-    const listener = () => handler();
-    this.addEventListener('resume', listener);
-    return () => this.removeEventListener('resume', listener);
+    this.resumeHandlers.add(handler);
+    return () => this.resumeHandlers.delete(handler);
   }
 
   /**
-   * 监听音频数据可用事件（现代 API）
+   * 监听音频数据可用事件
    * @param handler 事件处理函数
    * @returns 取消订阅函数
    */
   onDataAvailable(handler: (data: Blob, timecode: number) => void): UnsubscribeFn {
-    const listener = (event: any) => handler(event.data, event.timecode);
-    this.addEventListener('dataavailable', listener);
-    return () => this.removeEventListener('dataavailable', listener);
+    this.dataAvailableHandlers.add(handler);
+    return () => this.dataAvailableHandlers.delete(handler);
   }
 
   /**
-   * 监听错误事件（现代 API）
+   * 监听错误事件
    * @param handler 事件处理函数
    * @returns 取消订阅函数
    */
   onError(handler: (error: Error) => void): UnsubscribeFn {
-    const listener = (event: any) => handler(event.error);
-    this.addEventListener('error', listener);
-    return () => this.removeEventListener('error', listener);
+    this.errorHandlers.add(handler);
+    return () => this.errorHandlers.delete(handler);
   }
 
   /**

@@ -237,46 +237,42 @@
 
     startBtn.addEventListener('click', async () => {
       try {
-        // 使用工厂方法创建录音器实例
-        recorder = Recorder.create({
-          audioBitsPerSecond: 64000, // 较低比特率用于流传输
-          timeslice: 100, // 每 100ms 获取块以实现低延迟
-        });
-
         chunkCount = 0;
         totalDataSent = 0;
         chunkCountEl.textContent = '0';
         dataSentEl.textContent = '0';
 
-        recorder.addEventListener('dataavailable', (event) => {
-          if (event.data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
-            try {
-              ws.send(event.data);
-              chunkCount++;
-              totalDataSent += event.data.size;
-              chunkCountEl.textContent = chunkCount;
-              dataSentEl.textContent = formatBytes(totalDataSent);
-              log(`Sent chunk #${chunkCount}: ${formatBytes(event.data.size)}`, 'sent');
-            } catch (error) {
-              log('Failed to send chunk: ' + error.message, 'error');
+        // 使用工厂方法和配置回调创建录音器实例
+        recorder = Recorder.create({
+          audioBitsPerSecond: 64000, // 较低比特率用于流传输
+          timeslice: 100, // 每 100ms 获取块以实现低延迟
+          onDataAvailable: (data, timecode) => {
+            if (data.size > 0 && ws && ws.readyState === WebSocket.OPEN) {
+              try {
+                ws.send(data);
+                chunkCount++;
+                totalDataSent += data.size;
+                chunkCountEl.textContent = chunkCount;
+                dataSentEl.textContent = formatBytes(totalDataSent);
+                log(`Sent chunk #${chunkCount}: ${formatBytes(data.size)}`, 'sent');
+              } catch (error) {
+                log('Failed to send chunk: ' + error.message, 'error');
+              }
             }
-          }
-        });
-
-        recorder.addEventListener('start', () => {
-          recordingStatusEl.textContent = 'Recording';
-          log('Started recording and streaming', 'info');
-          updateButtons();
-        });
-
-        recorder.addEventListener('stop', () => {
-          recordingStatusEl.textContent = 'Stopped';
-          log('Stopped recording', 'info');
-          updateButtons();
-        });
-
-        recorder.addEventListener('error', (event) => {
-          log('Recording error: ' + event.error.message, 'error');
+          },
+          onStart: () => {
+            recordingStatusEl.textContent = 'Recording';
+            log('Started recording and streaming', 'info');
+            updateButtons();
+          },
+          onStop: () => {
+            recordingStatusEl.textContent = 'Stopped';
+            log('Stopped recording', 'info');
+            updateButtons();
+          },
+          onError: (error) => {
+            log('Recording error: ' + error.message, 'error');
+          },
         });
 
         await recorder.start();

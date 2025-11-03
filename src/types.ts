@@ -68,55 +68,6 @@ export interface RecorderOptions extends RecorderEventHandlers {
 export type RecorderState = 'inactive' | 'recording' | 'paused';
 
 /**
- * 录音器支持的事件类型
- */
-export interface RecorderEventMap {
-  /**
-   * 录音开始时触发
-   */
-  start: Event;
-
-  /**
-   * 录音停止时触发
-   */
-  stop: Event;
-
-  /**
-   * 录音暂停时触发
-   */
-  pause: Event;
-
-  /**
-   * 录音从暂停恢复时触发
-   */
-  resume: Event;
-
-  /**
-   * 音频数据可用时触发
-   */
-  dataavailable: BlobEvent;
-
-  /**
-   * 发生错误时触发
-   */
-  error: ErrorEvent;
-}
-
-/**
- * 包含音频数据的自定义事件
- */
-export class BlobEvent extends Event {
-  data: Blob;
-  timecode: number;
-
-  constructor(type: string, data: Blob, timecode: number) {
-    super(type);
-    this.data = data;
-    this.timecode = timecode;
-  }
-}
-
-/**
  * 支持的输出格式
  */
 export type OutputFormat = 'webm' | 'mp4' | 'wav' | 'mp3' | 'ogg' | 'flac';

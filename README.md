@@ -10,7 +10,7 @@
 - 🎵 **格式转换** - 基于 mediabunny 支持转换为 MP4、WAV、MP3、OGG、FLAC 等格式
 - 📦 **现代技术栈** - TypeScript 5.9+、ESM 模块、ES2020+ 目标
 - 🎯 **类型安全** - 完整的 TypeScript 类型定义支持
-- ✨ **现代化事件处理** - 支持传统的 `addEventListener` 和现代的 `onXxx` 方法（返回清理函数）
+- ✨ **现代化事件处理** - 配置回调和 `onXxx` 方法（返回清理函数），无需使用 `addEventListener`
 - ⚡ **轻量级** - 使用 tsdown 打包，优化包大小
 
 ## 安装
@@ -107,7 +107,7 @@ await recorder.start();
 ```typescript
 const recorder = Recorder.create({ timeslice: 100 });
 
-// 使用现代的 on 方法，自动返回清理函数
+// 使用 on 方法，自动返回清理函数
 const unsubscribe = recorder.onDataAvailable((data, timecode) => {
   websocket.send(data);
 });
@@ -116,20 +116,6 @@ await recorder.start();
 
 // 不再需要时，调用清理函数
 unsubscribe();
-```
-
-**方式三：传统的 addEventListener（仍然支持）**
-
-```typescript
-const recorder = Recorder.create({ timeslice: 100 });
-
-recorder.addEventListener('dataavailable', (event) => {
-  if (event.data.size > 0) {
-    websocket.send(event.data);
-  }
-});
-
-await recorder.start();
 ```
 
 ### 实时流传输（WebSocket 示例）
@@ -401,7 +387,7 @@ interface RecorderOptions {
 - `static isTypeSupported(mimeType: string): boolean` - 检查是否支持 MIME 类型
 - `static async convert(blob: Blob, options: ConvertOptions): Promise<Blob>` - 转换音频格式
 
-#### 现代化事件方法（推荐使用）
+#### 事件方法
 
 每个方法都返回一个清理函数 `UnsubscribeFn`，调用它可以取消事件监听：
 
@@ -412,11 +398,6 @@ interface RecorderOptions {
 - `onDataAvailable(handler: (data: Blob, timecode: number) => void): UnsubscribeFn` - 监听音频数据可用事件
 - `onError(handler: (error: Error) => void): UnsubscribeFn` - 监听错误事件
 
-#### 传统事件方法（仍然支持）
-
-- `addEventListener<K>(type: K, listener: (event: RecorderEventMap[K]) => void): void`
-- `removeEventListener<K>(type: K, listener: (event: RecorderEventMap[K]) => void): void`
-
 #### 转换选项
 
 ```typescript
@@ -425,15 +406,6 @@ interface ConvertOptions {
   audioBitsPerSecond?: number;
 }
 ```
-
-#### 事件
-
-- `start` - 录音开始时触发
-- `stop` - 录音停止时触发
-- `pause` - 录音暂停时触发
-- `resume` - 录音恢复时触发
-- `dataavailable` - 音频数据可用时触发
-- `error` - 发生错误时触发
 
 ## 实际应用示例
 

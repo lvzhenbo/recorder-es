@@ -146,41 +146,36 @@
 
     startBtn.addEventListener('click', async () => {
       try {
-        // 使用工厂方法创建录音器实例
+        // 使用工厂方法和配置回调创建录音器实例
         recorder = Recorder.create({
           audioBitsPerSecond: 128000,
           timeslice: 1000,
-        });
-
-        recorder.addEventListener('start', () => {
-          statusEl.textContent = '录音中...';
-          startTime = Date.now();
-          durationInterval = setInterval(updateDuration, 100);
-          updateButtons();
-        });
-
-        recorder.addEventListener('stop', () => {
-          statusEl.textContent = '录音已停止';
-          clearInterval(durationInterval);
-          durationEl.textContent = '0';
-          updateButtons();
-        });
-
-        recorder.addEventListener('pause', () => {
-          statusEl.textContent = '录音已暂停';
-          clearInterval(durationInterval);
-          updateButtons();
-        });
-
-        recorder.addEventListener('resume', () => {
-          statusEl.textContent = '录音中...';
-          durationInterval = setInterval(updateDuration, 100);
-          updateButtons();
-        });
-
-        recorder.addEventListener('error', (event) => {
-          statusEl.textContent = `错误: ${event.error.message}`;
-          console.error('录音错误:', event.error);
+          onStart: () => {
+            statusEl.textContent = '录音中...';
+            startTime = Date.now();
+            durationInterval = setInterval(updateDuration, 100);
+            updateButtons();
+          },
+          onStop: () => {
+            statusEl.textContent = '录音已停止';
+            clearInterval(durationInterval);
+            durationEl.textContent = '0';
+            updateButtons();
+          },
+          onPause: () => {
+            statusEl.textContent = '录音已暂停';
+            clearInterval(durationInterval);
+            updateButtons();
+          },
+          onResume: () => {
+            statusEl.textContent = '录音中...';
+            durationInterval = setInterval(updateDuration, 100);
+            updateButtons();
+          },
+          onError: (error) => {
+            statusEl.textContent = `错误: ${error.message}`;
+            console.error('录音错误:', error);
+          },
         });
 
         await recorder.start();
