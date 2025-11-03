@@ -1,7 +1,47 @@
 /**
+ * 事件监听器清理函数
+ */
+export type UnsubscribeFn = () => void;
+
+/**
+ * 事件处理器类型
+ */
+export interface RecorderEventHandlers {
+  /**
+   * 录音开始时的回调
+   */
+  onStart?: () => void;
+
+  /**
+   * 录音停止时的回调
+   */
+  onStop?: () => void;
+
+  /**
+   * 录音暂停时的回调
+   */
+  onPause?: () => void;
+
+  /**
+   * 录音恢复时的回调
+   */
+  onResume?: () => void;
+
+  /**
+   * 音频数据可用时的回调
+   */
+  onDataAvailable?: (data: Blob, timecode: number) => void;
+
+  /**
+   * 发生错误时的回调
+   */
+  onError?: (error: Error) => void;
+}
+
+/**
  * 录音器配置选项
  */
-export interface RecorderOptions {
+export interface RecorderOptions extends RecorderEventHandlers {
   /**
    * 录音使用的音频 MIME 类型
    * @default 'audio/webm;codecs=opus'

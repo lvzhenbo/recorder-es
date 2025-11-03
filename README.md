@@ -10,6 +10,7 @@
 - 🎵 **格式转换** - 基于 mediabunny 支持转换为 MP4、WAV、MP3、OGG、FLAC 等格式
 - 📦 **现代技术栈** - TypeScript 5.9+、ESM 模块、ES2020+ 目标
 - 🎯 **类型安全** - 完整的 TypeScript 类型定义支持
+- ✨ **现代化事件处理** - 支持传统的 `addEventListener` 和现代的 `onXxx` 方法（返回清理函数）
 - ⚡ **轻量级** - 使用 tsdown 打包，优化包大小
 
 ## 安装
@@ -74,6 +75,63 @@ const mp3Blob = await Recorder.convert(webmBlob, {
 });
 ```
 
+### 现代化事件处理
+
+**方式一：配置时传入回调函数（推荐）**
+
+```typescript
+import { Recorder } from 'recorder-es';
+
+const recorder = Recorder.create({
+  timeslice: 100,
+  onStart: () => {
+    console.log('录音已开始');
+  },
+  onDataAvailable: (data, timecode) => {
+    // 实时处理音频数据
+    websocket.send(data);
+  },
+  onStop: () => {
+    console.log('录音已停止');
+  },
+  onError: (error) => {
+    console.error('录音错误:', error);
+  },
+});
+
+await recorder.start();
+```
+
+**方式二：使用 onXxx 方法（返回清理函数）**
+
+```typescript
+const recorder = Recorder.create({ timeslice: 100 });
+
+// 使用现代的 on 方法，自动返回清理函数
+const unsubscribe = recorder.onDataAvailable((data, timecode) => {
+  websocket.send(data);
+});
+
+await recorder.start();
+
+// 不再需要时，调用清理函数
+unsubscribe();
+```
+
+**方式三：传统的 addEventListener（仍然支持）**
+
+```typescript
+const recorder = Recorder.create({ timeslice: 100 });
+
+recorder.addEventListener('dataavailable', (event) => {
+  if (event.data.size > 0) {
+    websocket.send(event.data);
+  }
+});
+
+await recorder.start();
+```
+
 ### 实时流传输（WebSocket 示例）
 
 适用于实时转译或音频处理场景：
@@ -81,19 +139,17 @@ const mp3Blob = await Recorder.convert(webmBlob, {
 ```typescript
 import { Recorder } from 'recorder-es';
 
+// 使用配置回调的方式（最简洁）
 const recorder = Recorder.create({
   timeslice: 100, // 每 100ms 获取数据块，实现低延迟
-});
-
-// 监听音频数据块
-recorder.addEventListener('dataavailable', (event) => {
-  if (event.data.size > 0) {
+  onDataAvailable: (data, timecode) => {
     // 通过 WebSocket 发送音频块
-    websocket.send(event.data);
-  }
+    if (websocket.readyState === WebSocket.OPEN) {
+      websocket.send(data);
+    }
+  },
 });
 
-// 开始录音
 await recorder.start();
 
 // 也可以直接访问音频流
@@ -121,41 +177,11 @@ recorder.resume();
 const audioBlob = await recorder.stop();
 ```
 
-### 事件处理
-
-```typescript
-const recorder = Recorder.create();
-
-recorder.addEventListener('start', () => {
-  console.log('录音已开始');
-});
-
-recorder.addEventListener('stop', () => {
-  console.log('录音已停止');
-});
-
-recorder.addEventListener('pause', () => {
-  console.log('录音已暂停');
-});
-
-recorder.addEventListener('resume', () => {
-  console.log('录音已恢复');
-});
-
-recorder.addEventListener('dataavailable', (event) => {
-  console.log('收到音频块:', event.data.size, '字节');
-});
-
-recorder.addEventListener('error', (event) => {
-  console.error('录音错误:', event.error);
-});
-
-await recorder.start();
-```
-
 ### 在 Vue 中使用
 
-工厂模式使得在 Vue 等现代框架中使用更加方便：
+工厂模式和现代化的事件处理使得在 Vue 等现代框架中使用更加方便：
+
+**方式一：使用配置回调（推荐）**
 
 ```vue
 <script setup lang="ts">
@@ -164,14 +190,31 @@ import { Recorder } from 'recorder-es';
 
 const recorder = ref<Recorder | null>(null);
 const isRecording = ref(false);
+const audioChunks = ref<Blob[]>([]);
 
 const startRecording = async () => {
+  audioChunks.value = [];
+  
   recorder.value = Recorder.create({
     timeslice: 1000,
+    onStart: () => {
+      isRecording.value = true;
+      console.log('录音已开始');
+    },
+    onDataAvailable: (data, timecode) => {
+      audioChunks.value.push(data);
+      console.log('收到音频块:', data.size, '字节');
+    },
+    onStop: () => {
+      isRecording.value = false;
+      console.log('录音已停止');
+    },
+    onError: (error) => {
+      console.error('录音错误:', error);
+    },
   });
   
   await recorder.value.start();
-  isRecording.value = true;
 };
 
 const stopRecording = async () => {
@@ -179,7 +222,6 @@ const stopRecording = async () => {
     const blob = await recorder.value.stop();
     recorder.value.dispose();
     recorder.value = null;
-    isRecording.value = false;
     
     // 处理录音结果
     console.log('录音完成', blob);
@@ -187,6 +229,70 @@ const stopRecording = async () => {
 };
 
 onUnmounted(() => {
+  recorder.value?.dispose();
+});
+</script>
+
+<template>
+  <div>
+    <button @click="startRecording" :disabled="isRecording">
+      开始录音
+    </button>
+    <button @click="stopRecording" :disabled="!isRecording">
+      停止录音
+    </button>
+    <p>已收到 {{ audioChunks.length }} 个音频块</p>
+  </div>
+</template>
+```
+
+**方式二：使用 onXxx 方法**
+
+```vue
+<script setup lang="ts">
+import { ref, onUnmounted } from 'vue';
+import { Recorder, type UnsubscribeFn } from 'recorder-es';
+
+const recorder = ref<Recorder | null>(null);
+const isRecording = ref(false);
+const unsubscribes = ref<UnsubscribeFn[]>([]);
+
+const startRecording = async () => {
+  recorder.value = Recorder.create({ timeslice: 1000 });
+  
+  // 使用 on 方法注册事件，并保存清理函数
+  unsubscribes.value = [
+    recorder.value.onStart(() => {
+      isRecording.value = true;
+    }),
+    recorder.value.onDataAvailable((data, timecode) => {
+      console.log('收到音频块:', data.size, '字节');
+    }),
+    recorder.value.onStop(() => {
+      isRecording.value = false;
+    }),
+  ];
+  
+  await recorder.value.start();
+};
+
+const stopRecording = async () => {
+  if (recorder.value) {
+    const blob = await recorder.value.stop();
+    
+    // 清理所有事件监听
+    unsubscribes.value.forEach(fn => fn());
+    unsubscribes.value = [];
+    
+    recorder.value.dispose();
+    recorder.value = null;
+    
+    console.log('录音完成', blob);
+  }
+};
+
+onUnmounted(() => {
+  unsubscribes.value.forEach(fn => fn());
   recorder.value?.dispose();
 });
 </script>
@@ -267,6 +373,14 @@ interface RecorderOptions {
    * @default 1000
    */
   timeslice?: number;
+
+  // 现代化的事件处理器（可选）
+  onStart?: () => void;
+  onStop?: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
+  onDataAvailable?: (data: Blob, timecode: number) => void;
+  onError?: (error: Error) => void;
 }
 ```
 
@@ -286,6 +400,22 @@ interface RecorderOptions {
 - `dispose(): void` - 释放所有资源
 - `static isTypeSupported(mimeType: string): boolean` - 检查是否支持 MIME 类型
 - `static async convert(blob: Blob, options: ConvertOptions): Promise<Blob>` - 转换音频格式
+
+#### 现代化事件方法（推荐使用）
+
+每个方法都返回一个清理函数 `UnsubscribeFn`，调用它可以取消事件监听：
+
+- `onStart(handler: () => void): UnsubscribeFn` - 监听录音开始事件
+- `onStop(handler: () => void): UnsubscribeFn` - 监听录音停止事件
+- `onPause(handler: () => void): UnsubscribeFn` - 监听录音暂停事件
+- `onResume(handler: () => void): UnsubscribeFn` - 监听录音恢复事件
+- `onDataAvailable(handler: (data: Blob, timecode: number) => void): UnsubscribeFn` - 监听音频数据可用事件
+- `onError(handler: (error: Error) => void): UnsubscribeFn` - 监听错误事件
+
+#### 传统事件方法（仍然支持）
+
+- `addEventListener<K>(type: K, listener: (event: RecorderEventMap[K]) => void): void`
+- `removeEventListener<K>(type: K, listener: (event: RecorderEventMap[K]) => void): void`
 
 #### 转换选项
 
@@ -309,15 +439,39 @@ interface ConvertOptions {
 
 ### 实时转译
 
+**使用现代化的配置回调（推荐）：**
+
 ```typescript
 import { Recorder } from 'recorder-es';
 
+const ws = new WebSocket('wss://transcription-service.example.com');
+
+const recorder = Recorder.create({
+  timeslice: 500,
+  onDataAvailable: (data, timecode) => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(data);
+    }
+  },
+});
+
+ws.addEventListener('message', (event) => {
+  const transcription = JSON.parse(event.data);
+  console.log('转译结果:', transcription.text);
+});
+
+await recorder.start();
+```
+
+**使用 onXxx 方法：**
+
+```typescript
 const recorder = Recorder.create({ timeslice: 500 });
 const ws = new WebSocket('wss://transcription-service.example.com');
 
-recorder.addEventListener('dataavailable', (event) => {
+const unsubscribe = recorder.onDataAvailable((data, timecode) => {
   if (ws.readyState === WebSocket.OPEN) {
-    ws.send(event.data);
+    ws.send(data);
   }
 });
 
@@ -327,6 +481,9 @@ ws.addEventListener('message', (event) => {
 });
 
 await recorder.start();
+
+// 不需要时清理
+// unsubscribe();
 ```
 
 ### 语音活动检测
