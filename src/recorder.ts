@@ -325,13 +325,32 @@ export function isTypeSupported(mimeType: string): boolean {
 /**
  * 将录音转换为指定格式
  * 使用 mediabunny 库进行格式转换
+ * 
+ * 注意：MP3 格式需要额外安装 @mediabunny/mp3-encoder 扩展
+ * 详见：https://mediabunny.dev/guide/output-formats#mp3
+ * 
  * @param blob 原始录音 Blob
  * @param options 转换选项
  * @returns 返回转换后的音频 Blob 的 Promise
+ * @throws 如果转换失败或格式不支持（例如 MP3 未安装编码器）
  */
 export async function convertAudio(blob: Blob, options: ConvertOptions): Promise<Blob> {
   // 动态导入 mediabunny 以避免打包时的依赖问题
   const { Input, Output, BlobSource, BufferTarget, ALL_FORMATS } = await import('mediabunny');
+  
+  // MP3 格式特殊提示
+  if (options.format === 'mp3') {
+    try {
+      // 尝试导入 mp3-encoder 以检查是否可用
+      await import('@mediabunny/mp3-encoder');
+    } catch (e) {
+      throw new Error(
+        'MP3 格式需要安装 @mediabunny/mp3-encoder 扩展。\n' +
+        '请运行: npm install @mediabunny/mp3-encoder\n' +
+        '详见: https://mediabunny.dev/guide/output-formats#mp3'
+      );
+    }
+  }
   
   try {
     // 使用 mediabunny 读取输入文件

@@ -168,6 +168,9 @@ export interface RecorderOptions extends RecorderEventHandlers {
 /**
  * 支持的输出格式
  * 基于 mediabunny 支持的所有容器格式
+ * 
+ * 注意：MP3 格式需要额外安装 @mediabunny/mp3-encoder 扩展
+ * 详见：https://mediabunny.dev/guide/output-formats#mp3
  */
 export type OutputFormat = 
   | 'webm'  // WebM 容器
@@ -175,7 +178,7 @@ export type OutputFormat =
   | 'mov'   // QuickTime 文件格式
   | 'mkv'   // Matroska 容器
   | 'ogg'   // Ogg 容器
-  | 'mp3'   // MP3 音频
+  | 'mp3'   // MP3 音频（需要 @mediabunny/mp3-encoder）
   | 'wav'   // WAVE 音频
   | 'aac'   // AAC 音频（ADTS 格式）
   | 'flac'; // FLAC 无损音频
