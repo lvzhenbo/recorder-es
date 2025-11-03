@@ -8,11 +8,12 @@
 - 📡 **实时流传输** - 支持 WebSocket 传输和实时音频处理
 - 🔄 **完整控制** - 开始、停止、暂停和恢复录音
 - 🎵 **格式转换** - 基于 mediabunny 支持转换为 MP4、WAV、MP3、OGG、FLAC 等格式
+- 📊 **音量监测** - 实时检测音量级别，适用于可视化和用户反馈
 - 📦 **现代技术栈** - TypeScript 5.9+、ESM 模块、ES2020+ 目标
 - 🎯 **类型安全** - 完整的 TypeScript 类型定义支持
 - ✨ **现代化事件处理** - 配置回调和 `onXxx` 方法（返回清理函数），无需使用 `addEventListener`
 - 🌲 **优化摇树** - 函数式设计，最大化tree-shaking效果
-- ⚡ **轻量级** - 仅 7.15 KB（gzip: 2.18 KB），使用 tsdown 打包
+- ⚡ **轻量级** - 仅 9.00 KB（gzip: 2.69 KB），使用 tsdown 打包
 
 ## 安装
 
@@ -116,6 +117,43 @@ const unsubscribe = recorder.onDataAvailable((data, timecode) => {
 await recorder.start();
 
 // 不再需要时，调用清理函数
+unsubscribe();
+```
+
+### 音量级别监测
+
+实时监测录音音量，适用于可视化和用户反馈：
+
+```typescript
+import { createRecorder } from 'recorder-es';
+
+const recorder = createRecorder({
+  enableVolumeMonitoring: true, // 启用音量监测（默认启用）
+  volumeUpdateInterval: 100, // 更新频率：100ms（默认）
+  onVolumeChange: (volume) => {
+    // volume 范围: 0-100
+    console.log(`当前音量: ${volume}%`);
+    
+    // 更新 UI 音量指示器
+    volumeIndicator.style.width = `${volume}%`;
+  },
+});
+
+await recorder.start();
+```
+
+也可以使用 `onVolumeChange` 方法动态添加监听器：
+
+```typescript
+const recorder = createRecorder();
+
+const unsubscribe = recorder.onVolumeChange((volume) => {
+  console.log(`音量: ${volume}%`);
+});
+
+await recorder.start();
+
+// 不需要时移除监听器
 unsubscribe();
 ```
 
@@ -396,6 +434,18 @@ interface RecorderOptions {
    */
   timeslice?: number;
 
+  /**
+   * 是否启用音量监测
+   * @default true
+   */
+  enableVolumeMonitoring?: boolean;
+
+  /**
+   * 音量更新频率（毫秒）
+   * @default 100
+   */
+  volumeUpdateInterval?: number;
+
   // 现代化的事件处理器（可选）
   onStart?: () => void;
   onStop?: () => void;
@@ -403,6 +453,7 @@ interface RecorderOptions {
   onResume?: () => void;
   onDataAvailable?: (data: Blob, timecode: number) => void;
   onError?: (error: Error) => void;
+  onVolumeChange?: (volume: number) => void;
 }
 ```
 
@@ -431,6 +482,7 @@ interface RecorderOptions {
 - `onPause(handler: () => void): UnsubscribeFn` - 监听录音暂停事件
 - `onResume(handler: () => void): UnsubscribeFn` - 监听录音恢复事件
 - `onDataAvailable(handler: (data: Blob, timecode: number) => void): UnsubscribeFn` - 监听音频数据可用事件
+- `onVolumeChange(handler: (volume: number) => void): UnsubscribeFn` - 监听音量级别变化事件（音量范围 0-100）
 - `onError(handler: (error: Error) => void): UnsubscribeFn` - 监听错误事件
 
 #### 转换选项

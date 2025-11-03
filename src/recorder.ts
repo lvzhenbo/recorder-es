@@ -10,12 +10,17 @@ export function createRecorder(options: RecorderOptions = {}): RecorderInstance 
   let mediaRecorder: MediaRecorder | null = null;
   let audioStream: MediaStream | null = null;
   let chunks: Blob[] = [];
+  let audioContext: AudioContext | null = null;
+  let analyser: AnalyserNode | null = null;
+  let volumeCheckInterval: number | null = null;
   
   // 配置选项
   const config = {
     mimeType: options.mimeType || 'audio/webm;codecs=opus',
     audioBitsPerSecond: options.audioBitsPerSecond || 128000,
     timeslice: options.timeslice || 1000,
+    enableVolumeMonitoring: options.enableVolumeMonitoring !== false,
+    volumeUpdateInterval: options.volumeUpdateInterval || 100,
   };
   
   // 事件处理器注册表
@@ -25,6 +30,7 @@ export function createRecorder(options: RecorderOptions = {}): RecorderInstance 
   const resumeHandlers = new Set<() => void>();
   const dataAvailableHandlers = new Set<(data: Blob, timecode: number) => void>();
   const errorHandlers = new Set<(error: Error) => void>();
+  const volumeChangeHandlers = new Set<(volume: number) => void>();
   
   // 注册配置中的事件处理器
   if (options.onStart) startHandlers.add(options.onStart);
@@ -33,11 +39,72 @@ export function createRecorder(options: RecorderOptions = {}): RecorderInstance 
   if (options.onResume) resumeHandlers.add(options.onResume);
   if (options.onDataAvailable) dataAvailableHandlers.add(options.onDataAvailable);
   if (options.onError) errorHandlers.add(options.onError);
+  if (options.onVolumeChange) volumeChangeHandlers.add(options.onVolumeChange);
+  
+  /**
+   * 停止音量监测
+   */
+  function stopVolumeMonitoring(): void {
+    if (volumeCheckInterval !== null) {
+      clearInterval(volumeCheckInterval);
+      volumeCheckInterval = null;
+    }
+    if (audioContext) {
+      audioContext.close();
+      audioContext = null;
+    }
+    analyser = null;
+  }
+  
+  /**
+   * 开始音量监测
+   */
+  function startVolumeMonitoring(stream: MediaStream): void {
+    if (!config.enableVolumeMonitoring || volumeChangeHandlers.size === 0) {
+      return;
+    }
+    
+    try {
+      // 创建音频上下文和分析器
+      audioContext = new AudioContext();
+      analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+      
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+      
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      
+      // 定期检测音量
+      volumeCheckInterval = window.setInterval(() => {
+        if (!analyser) return;
+        
+        analyser.getByteFrequencyData(dataArray);
+        
+        // 计算平均音量
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const average = sum / dataArray.length;
+        
+        // 将音量归一化到 0-100 范围
+        const volume = Math.round((average / 255) * 100);
+        
+        // 通知所有监听器
+        volumeChangeHandlers.forEach(handler => handler(volume));
+      }, config.volumeUpdateInterval);
+    } catch (error) {
+      console.error('音量监测启动失败:', error);
+    }
+  }
   
   /**
    * 清理资源
    */
   function cleanup(): void {
+    stopVolumeMonitoring();
     if (audioStream) {
       audioStream.getTracks().forEach(track => track.stop());
       audioStream = null;
@@ -78,18 +145,22 @@ export function createRecorder(options: RecorderOptions = {}): RecorderInstance 
       
       // 设置事件监听器
       mediaRecorder.addEventListener('start', () => {
+        startVolumeMonitoring(audioStream!);
         startHandlers.forEach(handler => handler());
       });
       
       mediaRecorder.addEventListener('stop', () => {
+        stopVolumeMonitoring();
         stopHandlers.forEach(handler => handler());
       });
       
       mediaRecorder.addEventListener('pause', () => {
+        stopVolumeMonitoring();
         pauseHandlers.forEach(handler => handler());
       });
       
       mediaRecorder.addEventListener('resume', () => {
+        startVolumeMonitoring(audioStream!);
         resumeHandlers.forEach(handler => handler());
       });
       
@@ -234,6 +305,10 @@ export function createRecorder(options: RecorderOptions = {}): RecorderInstance 
     onError: (handler) => {
       errorHandlers.add(handler);
       return () => errorHandlers.delete(handler);
+    },
+    onVolumeChange: (handler) => {
+      volumeChangeHandlers.add(handler);
+      return () => volumeChangeHandlers.delete(handler);
     },
   };
 }

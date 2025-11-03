@@ -78,6 +78,11 @@ export interface RecorderInstance {
   onDataAvailable(handler: (data: Blob, timecode: number) => void): UnsubscribeFn;
   
   /**
+   * 监听音量级别变化事件
+   */
+  onVolumeChange(handler: (volume: number) => void): UnsubscribeFn;
+  
+  /**
    * 监听错误事件
    */
   onError(handler: (error: Error) => void): UnsubscribeFn;
@@ -116,6 +121,12 @@ export interface RecorderEventHandlers {
    * 发生错误时的回调
    */
   onError?: (error: Error) => void;
+
+  /**
+   * 音量级别变化时的回调
+   * @param volume 音量级别 (0-100)
+   */
+  onVolumeChange?: (volume: number) => void;
 }
 
 /**
@@ -140,6 +151,18 @@ export interface RecorderOptions extends RecorderEventHandlers {
    * @default 1000
    */
   timeslice?: number;
+
+  /**
+   * 是否启用音量监测
+   * @default true
+   */
+  enableVolumeMonitoring?: boolean;
+
+  /**
+   * 音量更新频率（毫秒）
+   * @default 100
+   */
+  volumeUpdateInterval?: number;
 }
 
 /**

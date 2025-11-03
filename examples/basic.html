@@ -77,7 +77,12 @@
   <div class="status">
     <strong>状态:</strong> <span id="status">未激活</span><br>
     <strong>录音状态:</strong> <span id="state">inactive</span><br>
-    <strong>时长:</strong> <span id="duration">0</span>秒
+    <strong>时长:</strong> <span id="duration">0</span>秒<br>
+    <strong>音量:</strong> 
+    <div style="display: inline-block; width: 200px; height: 20px; background: #e0e0e0; border-radius: 10px; overflow: hidden; vertical-align: middle;">
+      <div id="volumeBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #4caf50, #8bc34a); transition: width 0.1s;"></div>
+    </div>
+    <span id="volumeText">0%</span>
   </div>
 
   <div class="recordings" id="recordings">
@@ -95,6 +100,8 @@
     const statusEl = document.getElementById('status');
     const stateEl = document.getElementById('state');
     const durationEl = document.getElementById('duration');
+    const volumeBar = document.getElementById('volumeBar');
+    const volumeText = document.getElementById('volumeText');
     const recordingsEl = document.getElementById('recordings');
     const noRecordingsEl = document.getElementById('noRecordings');
 
@@ -150,6 +157,8 @@
         recorder = createRecorder({
           audioBitsPerSecond: 128000,
           timeslice: 1000,
+          enableVolumeMonitoring: true,
+          volumeUpdateInterval: 50,
           onStart: () => {
             statusEl.textContent = '录音中...';
             startTime = Date.now();
@@ -160,17 +169,25 @@
             statusEl.textContent = '录音已停止';
             clearInterval(durationInterval);
             durationEl.textContent = '0';
+            volumeBar.style.width = '0%';
+            volumeText.textContent = '0%';
             updateButtons();
           },
           onPause: () => {
             statusEl.textContent = '录音已暂停';
             clearInterval(durationInterval);
+            volumeBar.style.width = '0%';
+            volumeText.textContent = '0%';
             updateButtons();
           },
           onResume: () => {
             statusEl.textContent = '录音中...';
             durationInterval = setInterval(updateDuration, 100);
             updateButtons();
+          },
+          onVolumeChange: (volume) => {
+            volumeBar.style.width = `${volume}%`;
+            volumeText.textContent = `${volume}%`;
           },
           onError: (error) => {
             statusEl.textContent = `错误: ${error.message}`;
